@@ -130,7 +130,7 @@
             static void AddCard() {
                 if(sharedDeck.Count > 0) {
                     GetDeck().Add(sharedDeck.Pop());
-                    Console.WriteLine($"{GetPlayer().name} drew a card. {(GetPlayer().type == Player.Type.YOU ? "Your" : "Their")} card count is now {GetDeck().Count}.");
+                    Console.WriteLine($"\n>> {GetPlayer().name} drew a card. {(GetPlayer().type == Player.Type.YOU ? "Your" : "Their")} card count is now {GetDeck().Count}.");
                 }
                 else {
                     Console.WriteLine("There are no more cards that can be pulled...");
@@ -144,9 +144,9 @@
             async static Task PlayCard(Card playThis) {
                 // Start building the message to end off the current turn.
 
-                if(GetDeck().Count == 2) Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "have" : "has")} UNO!");
+                if(GetDeck().Count == 2) Console.WriteLine($"\n>> {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "have" : "has")} UNO!");
 
-                Console.Write($"\n>> {GetPlayer().name}: ");
+                Console.Write($"\n>> {GetPlayer().name} ({GetDeck().Count - 1}): ");
 
                 // Change the current color and number to the card that was played then moved on to the next player.
 
@@ -175,13 +175,13 @@
                     break;
 
                     case Kind.Draw_2:
-                    Console.WriteLine($"{GetPlayer().name} was forced to draw two cards!");
+                    Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw two cards!");
                     for(int d = 0; d < 2; d++) AddCard();
                     UpdatePlayerIndex();
                     break;
 
                     case Kind.Draw_4:
-                    Console.WriteLine($"{GetPlayer().name} was forced to draw FOUR cards! The new color is {Enum.GetName(currentColor)}.");
+                    Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards! The new color is {Enum.GetName(currentColor)}.");
                     for(int d = 0; d < 4; d++) AddCard();
                     UpdatePlayerIndex();
                     break;
