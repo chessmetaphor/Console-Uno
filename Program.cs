@@ -1,5 +1,14 @@
 ﻿namespace Uno_Game {
 
+    /*
+        Make it so the loops in PlayCard < Draw 2 and 4 only run until the player is out of cards to pull from the deck.
+        Like Math.Clamp(sharedDeck.Count, 1, 4)
+        1 is the min so the code runs at least once
+
+        ALSO. I tried to make it so the game doesn't just stall when an NPC is out of options.
+        The game just repeated that they couldn't move that turn forever. Play with 10 players to see if I fixed it
+    */
+
      sealed class UNO_Game {
 
         #region Globals
@@ -386,6 +395,7 @@
                 } while(!playCard);
 
                 if(playCard) await PlayCard(GetDeck()[cardIndex]);
+                else UpdatePlayerIndex();
                 
                 await Task.Delay(4000);
             }
