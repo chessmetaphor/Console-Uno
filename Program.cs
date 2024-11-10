@@ -15,6 +15,7 @@
         // Where to remove the last played card.
         static int listIndex;
         static int removeIndex;
+        static bool voidTurn = false;
 
         // Keeps track of both the shared deck and the status of all players.
         static Stack<Card> sharedDeck = []; 
@@ -255,6 +256,7 @@
 
                         case "END":
                         earlyBreak = true;
+                        voidTurn = true;
                         break;
 
                         default:
@@ -377,6 +379,7 @@
                     }
                     else {
                         Console.WriteLine($"{GetPlayer().name} can't play at all this turn.");
+                        voidTurn = true;
                         break;
                     }
 
@@ -416,8 +419,8 @@
                 if(GetPlayer().type == Player.Type.NPC) await NPCTurn();
                 else await YourTurn();
 
-                // The card is removed from the player's hand. (Don't touch this line with GetDeck().)
-                allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
+                if(!voidTurn) allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
+                else voidTurn = false;
             }
 
             // When the loop ends, the player with no cards is announced as the winner, then this game is over.
