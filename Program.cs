@@ -36,6 +36,15 @@
             
             #region Game Builder Methods 
 
+            static void ResetGame() {
+                reverseOrder = false;
+                currentColor = Suit.Unassigned;
+                currentNumber = -9;
+                voidTurn = false;
+                sharedDeck.Clear();
+                allPlayers.Clear();
+            }
+
             /// <summary>
             /// Creates all the players so the game can start.
             /// </summary>
@@ -60,7 +69,10 @@
                 foreach(KeyValuePair<Player, List<Card>> pl in allPlayers) Console.WriteLine($"{pl.Key.name} joined.");
             }
 
-            // Creates every possible card the players can have for the sharedDeck collection.
+            /// <summary>
+            /// Fills out each player's deck at the start of the game.
+            /// </summary>
+            /// <returns></returns> 
             async static Task CardDistribution() {
                 List<Card> builder = [];
                 Random rnd = new();
@@ -404,59 +416,96 @@
         // =====================================================================================
 
         async static Task Main() {
-            // Create players and their decks first.
+            int wins = 0;
+            bool noMore = false;
 
-            await Task.Run(CreatePlayers);
-
-            // Decide whose going first: you or an NPC.
-
-            string answer = string.Empty;
             do {
-                Console.WriteLine("\nAre you dealing? (Y/N)");
+                // Create players and their decks first.
 
-                string choose = Console.ReadLine();
+                await Task.Run(CreatePlayers);
 
-                switch(choose) {
-                    case "Y":
-                        answer = choose;
-                        playerIndex = 0;
-                    break;
+                // Decide whose going first: you or an NPC.
 
-                    case "N":
-                        Random rnd = new();
-                        answer = choose;
-                        playerIndex = rnd.Next(1, allPlayers.Count);
+                string answer = string.Empty;
+                do {
+                    Console.WriteLine("\nAre you dealing? (Y/N)");
+
+                    string choose = Console.ReadLine();
+
+                    switch(choose) {
+                        case "Y":
+                            answer = choose;
+                            playerIndex = 0;
                         break;
 
-                    default:
-                        Console.WriteLine("Just answer the question. (Y/N)");
-                        break;
+                        case "N":
+                            Random rnd = new();
+                            answer = choose;
+                            playerIndex = rnd.Next(1, allPlayers.Count);
+                            break;
+
+                        default:
+                            Console.WriteLine("Just answer the question. (Y/N)");
+                            break;
+                    }
+
+                } while(answer == string.Empty);
+
+                Console.WriteLine("Distributing cards. Please wait...");
+
+                await Task.Run(CardDistribution);
+
+                Console.WriteLine("Let's start the game...");
+
+                await Task.Delay(1500);
+
+                // =============================================================================
+            
+                // The gameplay loop runs as long as every player still has cards.
+
+                while(!allPlayers.Any(pl => pl.Value.Count == 0)) {
+                    if(GetPlayer().type == Player.Type.NPC) await NPCTurn();
+                    else await YourTurn();
+
+                    if(!voidTurn) allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
+                    else voidTurn = false;
                 }
 
-            } while(answer == string.Empty);
+                var winner = allPlayers.First(pl => pl.Value.Count == 0);
 
-            Console.WriteLine("Distributing cards. Please wait...");
+                // When the loop ends, the player with no cards is announced as the winner, then this game is over.
+                Console.WriteLine($"\n ~~~ GAME OVER! {winner.Key.name} won. ~~~ ");
 
-            await Task.Run(CardDistribution);
+                if(winner.Key.type == Player.Type.YOU) wins++;
 
-            Console.WriteLine("Let's start the game...");
+                // Give the player the option to play again if they want. 
 
-            await Task.Delay(1500);
+                string anotherRound = string.Empty;
+                do {
+                    Console.WriteLine("\nDo you want to play again? (Y/N)");
 
-            // =============================================================================
-           
-            // The gameplay loop runs as long as every player still has cards.
+                    string r_answer = Console.ReadLine();
 
-            while(!allPlayers.Any(pl => pl.Value.Count == 0)) {
-                if(GetPlayer().type == Player.Type.NPC) await NPCTurn();
-                else await YourTurn();
+                    switch(r_answer) {
+                        case "Y":
+                            Console.WriteLine("Starting another round.");
+                            ResetGame();
+                            anotherRound = "!";
+                            break;
+                        case "N":
+                            noMore = true;
+                            anotherRound = "!";
+                            break;
+                        default:
+                            Console.WriteLine("Answer the question. (Y/N)");
+                            break;
+                    }
 
-                if(!voidTurn) allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
-                else voidTurn = false;
-            }
+                } while (anotherRound == string.Empty);
 
-            // When the loop ends, the player with no cards is announced as the winner, then this game is over.
-            Console.WriteLine($"\n ~~~ GAME OVER! {allPlayers.First(pl => pl.Value.Count == 0).Key.name} won. ~~~ ");
+            } while(!noMore);
+
+            Console.WriteLine($"\n ~~~ Game complete! You won {wins} {(wins == 1? "time" : "times")}. ~~~");
         }
     
         // =====================================================================================
