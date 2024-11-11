@@ -5,7 +5,7 @@
         #region Globals
 
         // Keeps track of whose turn it is
-        static int playerIndex = 0; 
+        static int playerIndex; 
         static bool reverseOrder = false;
 
         // The color and number of the last played card.
@@ -36,7 +36,10 @@
             
             #region Game Builder Methods 
 
-            // Creates all players so the game can start.
+            /// <summary>
+            /// Creates all the players so the game can start.
+            /// </summary>
+            /// <returns></returns>
             async static Task CreatePlayers() {
                 // Give the number of npcs you want to play against.
 
@@ -176,7 +179,7 @@
                     break;
 
                     case Kind.Draw_2:
-                    Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw two cards!");
+                    Console.WriteLine($"{currentColor} Draw 2! {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw two cards!");
                     for(int d = 0; d < Math.Clamp(sharedDeck.Count, 1, 2); d++) AddCard();
                     UpdatePlayerIndex();
                     break;
@@ -319,15 +322,14 @@
                 Random rnd = new();
 
                 /* Checks:
-                    if any normal cards match the color or number of the one on top with EvaluateCard(). if they do, play the card that matches.
+                    If they have any normal cards match the color or number of the last played card with EvaluateCard(). If they do, play any card that matches.
 
-                    else if theres any wild cards. if there are, play either a wild or draw 4 depending on the next
-                    player's card count, and change current color to what the NPC has the most of.
-                    The NPC will pick the first wild card if the next player has more than 5 cards. otherwise, it will pick the first draw 4.
+                    Check if there is any wild cards. If there are, play either a wild or draw 4 at random, 
+                    after changing the current color to what the NPC has the most of.
 
-                    else if there are any cards still in the shared deck. just call addcard().
+                    If the NPC has no wildcards or normal cards they can play, check if there are any cards still in the shared deck. Just call addcard().
 
-                    else: theres literally nothing the npc can do, so their turn ends. break the do-while loop.
+                    If there's no more cards they can pull, there's literally nothing the npc can do. Their turn is void, so the do-while loop breaks.
                 */
                 
                 do {
@@ -342,7 +344,7 @@
                         playCard = true;
                     }
                     else if(GetDeck().Any(n => n.suit == Suit.Black)) {
-
+                    
                         // See all the cards that are wilds in the deck.
                         var eval = GetDeck().Where(e => e.suit == Suit.Black);
 
@@ -368,10 +370,11 @@
                                 
                             currentColor = amounts.OrderByDescending(x => x.Value).ToList().First().Key;
                         
+
                             // Then it will draw a random wildcard.
 
                             cardIndex = GetDeck().IndexOf(eval.ElementAt(rnd.Next(eval.Count())));
-
+                            
                             playCard = true;
                         }
                     }
@@ -404,6 +407,33 @@
             // Create players and their decks first.
 
             await Task.Run(CreatePlayers);
+
+            // Decide whose going first: you or an NPC.
+
+            string answer = string.Empty;
+            do {
+                Console.WriteLine("\nAre you dealing? (Y/N)");
+
+                string choose = Console.ReadLine();
+
+                switch(choose) {
+                    case "Y":
+                        answer = choose;
+                        playerIndex = 0;
+                    break;
+
+                    case "N":
+                        Random rnd = new();
+                        answer = choose;
+                        playerIndex = rnd.Next(1, allPlayers.Count);
+                        break;
+
+                    default:
+                        Console.WriteLine("Just answer the question. (Y/N)");
+                        break;
+                }
+
+            } while(answer == string.Empty);
 
             Console.WriteLine("Distributing cards. Please wait...");
 
