@@ -36,6 +36,10 @@
             
             #region Game Builder Methods 
 
+            /// <summary>
+            /// Sets the global variables back to their default values, and clears every existing card in the game (from sharedDeck) and every existing player.
+            /// This is all done before the start of a brand new game.
+            /// </summary>
             static void ResetGame() {
                 reverseOrder = false;
                 currentColor = Suit.Unassigned;
@@ -50,7 +54,7 @@
             /// </summary>
             /// <returns></returns>
             async static Task CreatePlayers() {
-                // Give the number of npcs you want to play against.
+                // Give the number of CPUs you want to play against.
 
                 Console.WriteLine("How many are playing? (Answer 2 - 10.)");
                 int playerNum = Math.Clamp(Convert.ToInt32(Console.ReadLine()), 2, 10);
@@ -62,11 +66,13 @@
 
                 allPlayers.Add(new Player("You", Player.Type.YOU), []);
 
-                for(int p = 1; p < playerNum; p++) allPlayers.Add(new Player($"Player {p + 1}", Player.Type.NPC), []);
+                for(int p = 1; p < playerNum; p++) { 
+                    string name = $"Player {p + 1}";
+                    allPlayers.Add(new Player(name, Player.Type.CPU), []); 
+                    Console.WriteLine($"{name} joined you.");
+                }
                 
                 await Task.Delay(3000);
-                
-                foreach(KeyValuePair<Player, List<Card>> pl in allPlayers) Console.WriteLine($"{pl.Key.name} joined.");
             }
 
             /// <summary>
@@ -91,10 +97,10 @@
                         builder.Add(new Card(suit, Kind.Draw_2, -1));
 
                         // for loop for numbered cards
-                        for(int n = 1; n < 10; n++) builder.Add(new Card(suit, n));
+                        for(int n = 1; n < 10; n++) builder.Add(new Card(suit, Kind.Normal, n));
                     }
 
-                    builder.Add(new Card(suit, 0));
+                    builder.Add(new Card(suit, Kind.Normal, 0));
                 }
 
                 await Task.Delay(1000);
@@ -119,18 +125,30 @@
 
             #region Action Methods
 
-            // Check to see if a normal card can be played at all.
+            /// <summary>
+            /// Check to see if a card can be played at all this turn.
+            /// </summary>
+            /// <param name="toPlay">Pass any card from any deck to see if it can be played this turn. </param>
+            /// <returns>True: It CAN be played. False: It CAN'T be played.</returns>
             static bool EvaluateCard(Card toPlay) => toPlay.suit.Equals(currentColor) || toPlay.number == currentNumber || currentColor == Suit.Unassigned;
 
-            // Quick way to grab the current player from the dictionary.
+            /// <summary>
+            /// Quick way to grab the current player from the dictionary.
+            /// </summary>
+            /// <returns>The player whose turn it is.</returns>
             static Player GetPlayer() => allPlayers.ElementAt(playerIndex).Key;
 
-            // Quick way to grab the current player's deck from the dictionary.
+            /// <summary>
+            /// Quick way to grab the current player's deck from the dictionary.
+            /// </summary>
+            /// <returns>A list containing all the cards in the current player's deck.</returns>
             static List<Card> GetDeck() => allPlayers.ElementAt(playerIndex).Value;
 
             // =========================================
 
-            // Player index is incremented or decremented based on the players' order. 
+            /// <summary>
+            /// The global player index is incremented or decremented based on the players' order.
+            /// </summary>  
             static void UpdatePlayerIndex() {
                 
                 playerIndex = !reverseOrder ? playerIndex + 1 : playerIndex - 1; 
@@ -141,8 +159,9 @@
                 else if(playerIndex < 0) playerIndex = allPlayers.Count - 1;
             }
 
-  
-            // Add a new card from the shared deck to the player/NPC's hand. 
+            /// <summary>
+            /// Add a new card from the shared deck to the current player's hand.
+            /// </summary>
             static void AddCard() {
                 if(sharedDeck.Count > 0) {
                     GetDeck().Add(sharedDeck.Pop());
@@ -182,32 +201,36 @@
                 switch(playThis.effect) {
                     
                     case Kind.Skip:
-                    Console.WriteLine($"A {Enum.GetName(currentColor)} skip card?! {(GetPlayer().type == Player.Type.YOU ? "Your" : GetPlayer().name + "'s")} turn was skipped!");
-                    UpdatePlayerIndex();
+                        Console.WriteLine($"A {Enum.GetName(currentColor)} skip card?! {(GetPlayer().type == Player.Type.YOU ? "Your" : GetPlayer().name + "'s")} turn was skipped!");
+                        UpdatePlayerIndex();
                     break;
 
                     case Kind.Reverse:
-                    Console.WriteLine($"A {Enum.GetName(currentColor)} Reverse card?! It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn again!");
+                        Console.WriteLine($"A {Enum.GetName(currentColor)} Reverse card?! It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn again!");
                     break;
 
                     case Kind.Draw_2:
-                    Console.WriteLine($"{currentColor} Draw 2! {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw two cards!");
-                    for(int d = 0; d < Math.Clamp(sharedDeck.Count, 1, 2); d++) AddCard();
-                    UpdatePlayerIndex();
+                        Console.WriteLine($"{currentColor} Draw 2! {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw two cards!");
+
+                        for(int d = 0; d < Math.Clamp(sharedDeck.Count, 1, 2); d++) AddCard();
+                        
+                        UpdatePlayerIndex();
                     break;
 
                     case Kind.Draw_4:
-                    Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards! The new color is {Enum.GetName(currentColor)}.");
-                    for(int d = 0; d < Math.Clamp(sharedDeck.Count, 1, 4); d++) AddCard();
-                    UpdatePlayerIndex();
+                        Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards! The new color is {Enum.GetName(currentColor)}.");
+                        
+                        for(int d = 0; d < Math.Clamp(sharedDeck.Count, 1, 4); d++) AddCard();
+
+                        UpdatePlayerIndex();
                     break;
 
                     case Kind.Wild:
-                    Console.WriteLine($"A wildcard was just played?! The new color is {Enum.GetName(currentColor)}.");
+                        Console.WriteLine($"A wildcard was just played?! The new color is {Enum.GetName(currentColor)}.");
                     break;
 
                     case Kind.Normal:
-                    Console.WriteLine($"A {Enum.GetName(currentColor)} {currentNumber} card was played.");
+                        Console.WriteLine($"A {Enum.GetName(currentColor)} {currentNumber} card was played.");
                     break;
                 }
             
@@ -220,7 +243,9 @@
 
             #region Turn Methods
 
-            // Draws the player's cards at the start of their turn, and whenever they grab a new card, to the console.
+            /// <summary>
+            /// Draws your cards to the console, both at the start of your turn, and whenever you grab a new card.
+            /// </summary>
             static void ViewCards() {
                 Console.WriteLine("Here's your cards.");
                 
@@ -246,7 +271,10 @@
                 Console.Write("What will you do? ");
             }
 
-            // The routine for your turn. The game will wait for you to choose a card, and a new color when you play a wild.
+            /// <summary>
+            /// The instructions for your turn. The game will wait for you to choose a valid card, and a new color when you play a wild card.
+            /// </summary>
+            /// <returns></returns>
             async static Task YourTurn() {
                 ViewCards(); 
 
@@ -326,9 +354,13 @@
                 await Task.Delay(2000);
             }
 
-
-            // The NPCs will sort through their cards and keep pulling form the deck until they have a card they can use.
-            async static Task NPCTurn() {
+            /// <summary>
+            /// The behavior of the CPU player(s). They'll pick a card that matches the last card's number or color if they have one, and they'll play a 
+            /// wildcard if they don't. If they have no cards they can play, they'll pull from the deck until there are no cards to pull, or they eventually pull one
+            /// they can play.
+            /// </summary>
+            /// <returns></returns>
+            async static Task CPUTurn() {
                 bool playCard = false;
                 int cardIndex = 0;
                 Random rnd = new();
@@ -337,11 +369,11 @@
                     If they have any normal cards match the color or number of the last played card with EvaluateCard(). If they do, play any card that matches.
 
                     Check if there is any wild cards. If there are, play either a wild or draw 4 at random, 
-                    after changing the current color to what the NPC has the most of.
+                    after changing the current color to what the CPU has the most of.
 
-                    If the NPC has no wildcards or normal cards they can play, check if there are any cards still in the shared deck. Just call addcard().
+                    If the CPU has no wildcards or normal cards they can play, check if there are any cards still in the shared deck. Just call addcard().
 
-                    If there's no more cards they can pull, there's literally nothing the npc can do. Their turn is void, so the do-while loop breaks.
+                    If there's no more cards they can pull, there's literally nothing the CPU can do. Their turn is void, so the do-while loop breaks.
                 */
                 
                 do {
@@ -369,7 +401,7 @@
                             playCard = true;
                         }
                         else {
-                            // If there are more than just wild cards in their deck, the NPC will pick the RGBY color it has the most of.
+                            // If there are more than just wild cards in their deck, the CPU will pick the RGBY color it has the most of.
 
                             Dictionary<Suit, int> amounts = new() {
                                 {Suit.Red, 0},
@@ -415,6 +447,7 @@
 
         // =====================================================================================
 
+        // This is the gameplay loop.
         async static Task Main() {
             int wins = 0;
             bool noMore = false;
@@ -424,7 +457,7 @@
 
                 await Task.Run(CreatePlayers);
 
-                // Decide whose going first: you or an NPC.
+                // Decide whose going first: you or a CPU player.
 
                 string answer = string.Empty;
                 do {
@@ -434,13 +467,13 @@
 
                     switch(choose) {
                         case "Y":
-                            answer = choose;
+                            answer = "!";
                             playerIndex = 0;
                         break;
 
                         case "N":
                             Random rnd = new();
-                            answer = choose;
+                            answer = "!";
                             playerIndex = rnd.Next(1, allPlayers.Count);
                             break;
 
@@ -464,16 +497,19 @@
                 // The gameplay loop runs as long as every player still has cards.
 
                 while(!allPlayers.Any(pl => pl.Value.Count == 0)) {
-                    if(GetPlayer().type == Player.Type.NPC) await NPCTurn();
+                    
+                    if(GetPlayer().type == Player.Type.CPU) await CPUTurn();
                     else await YourTurn();
 
+                    // If you or a CPU did nothing this turn, no card is removed from your hands.
                     if(!voidTurn) allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
                     else voidTurn = false;
                 }
 
-                var winner = allPlayers.First(pl => pl.Value.Count == 0);
-
                 // When the loop ends, the player with no cards is announced as the winner, then this game is over.
+
+                var winner = allPlayers.First(pl => pl.Value.Count == 0);
+                
                 Console.WriteLine($"\n ~~~ GAME OVER! {winner.Key.name} won. ~~~ ");
 
                 if(winner.Key.type == Player.Type.YOU) wins++;
@@ -512,31 +548,26 @@
 
         #region Nested Structs
 
-        struct Card {
-
-            public int number;
-
-            public Suit suit;
-            public Kind effect;
-
-            public Card(Suit suit, Kind effect, int number) {
-                this.suit = suit;
-                this.effect = effect;
-                this.number = number;
-            }
-
-            public Card(Suit suit, int number) {
-                this.suit = suit;
-                effect = Kind.Normal;
-                this.number = number;
-            }
+        /// <summary>
+        /// All cards are objects with an assigned number, color, and effect.
+        /// </summary>
+        struct Card(Suit suit, Kind effect, int number)
+        {
+            public int number = number;
+            public Suit suit = suit;
+            public Kind effect = effect;
         }
 
+        /// <summary>
+        /// Every player has a name, and a marker for whether they are a player or CPU.
+        /// </summary>
+        /// <param name="name">The name of whoever's playing.</param>
+        /// <param name="tp">The marker for whether a player is you or a CPU.</param>
         struct Player(string name, Player.Type tp) {
             public string name = name;
             public Type type = tp;
 
-            public enum Type { YOU, NPC }
+            public enum Type { YOU, CPU }
         } 
 
         #endregion
