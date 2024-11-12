@@ -1,5 +1,7 @@
 ﻿namespace Uno_Game {
 
+    // A known problem: Eventually the game will stall when absolutely no one can play their card.
+
      sealed class UNO_Game {
 
         #region Globals
@@ -15,7 +17,10 @@
         // Where to remove the last played card.
         static int listIndex;
         static int removeIndex;
+
+        // Keeps track of the turns where a player couldn't do anything.
         static bool voidTurn = false;
+        static int stalled = 0;
 
         // Keeps track of both the shared deck and the status of all players.
         static Stack<Card> sharedDeck = []; 
@@ -45,6 +50,7 @@
                 currentColor = Suit.Unassigned;
                 currentNumber = -9;
                 voidTurn = false;
+                stalled = 0;
                 sharedDeck.Clear();
                 allPlayers.Clear();
             }
@@ -496,24 +502,35 @@
             
                 // The gameplay loop runs as long as every player still has cards.
 
-                while(!allPlayers.Any(pl => pl.Value.Count == 0)) {
+                while(!allPlayers.Any(pl => pl.Value.Count == 0) && stalled < allPlayers.Count) {
                     
                     if(GetPlayer().type == Player.Type.CPU) await CPUTurn();
                     else await YourTurn();
 
                     // If you or a CPU did nothing this turn, no card is removed from your hands.
-                    if(!voidTurn) allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
-                    else voidTurn = false;
+                    if(!voidTurn) { 
+                        allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
+                        if(stalled > 0) stalled = 0;
+                    }
+                    else { 
+                        voidTurn = false;
+                        stalled++;
+                    }
                 }
 
-                // When the loop ends, the player with no cards is announced as the winner, then this game is over.
+                if(stalled < allPlayers.Count) {
+                    // When the loop ends, the player with no cards is announced as the winner, then this game is over.
 
-                var winner = allPlayers.First(pl => pl.Value.Count == 0);
+                    var winner = allPlayers.First(pl => pl.Value.Count == 0);
                 
-                Console.WriteLine($"\n ~~~ GAME OVER! {winner.Key.name} won. ~~~ ");
+                
+                    Console.WriteLine($"\n ~~~ GAME OVER! {winner.Key.name} won. ~~~ ");
 
-                if(winner.Key.type == Player.Type.YOU) wins++;
-
+                    if(winner.Key.type == Player.Type.YOU) wins++;
+                }
+                else {
+                    Console.WriteLine("\nNo one can play their cards, so the game has to end in a draw.");
+                }
                 // Give the player the option to play again if they want. 
 
                 string anotherRound = string.Empty;
