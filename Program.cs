@@ -1,30 +1,28 @@
 ﻿namespace Uno_Game {
 
-    // A known problem: Eventually the game will stall when absolutely no one can play their card.
-
      sealed class UNO_Game {
 
-        #region Globals
+        #region Global Variables
 
         // Keeps track of whose turn it is
         static int playerIndex; 
-        static bool reverseOrder = false;
+        static bool reverseOrder = false; // changes when a reverse card is played
 
         // The color and number of the last played card.
         static Suit currentColor = Suit.Unassigned;
         static int currentNumber = -9;
 
         // Where to remove the last played card.
-        static int listIndex;
-        static int removeIndex;
+        static int listIndex; // from whose hand
+        static int removeIndex; // spot in the hand the card occupies 
 
         // Keeps track of the turns where a player couldn't do anything.
-        static bool voidTurn = false;
-        static int stalled = 0;
+        static bool voidTurn = false; // a turn where a player can play no cards or draw from the deck is considered void
+        static int stalled = 0; // count of how many players couldn't move in a row
 
         // Keeps track of both the shared deck and the status of all players.
-        static Stack<Card> sharedDeck = []; 
-        static Dictionary<Player, List<Card>> allPlayers = [];
+        static Stack<Card> sharedDeck = []; // where every player pulls new cards from
+        static Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
 
         public enum Suit { Red, Blue, Green, Yellow, Black, Unassigned }
@@ -529,8 +527,11 @@
                     if(winner.Key.type == Player.Type.YOU) wins++;
                 }
                 else {
-                    Console.WriteLine("\nNo one can play their cards, so the game has to end in a draw.");
+                    // If too many void turns have been taken in a row, the game ends in a draw.
+                    
+                    Console.WriteLine($"\nSince no one can play their cards, the game has to end in a{(allPlayers.Count > 2 ? $" {allPlayers.Count}-way" : " ")}draw.");
                 }
+
                 // Give the player the option to play again if they want. 
 
                 string anotherRound = string.Empty;
