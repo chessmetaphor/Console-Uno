@@ -1,5 +1,11 @@
 ﻿namespace Uno_Game {
 
+    /*
+        Known issue: Sometimes the text highlighting doesn't work.
+        It does at first, but when a turn comes when the CPU don't play a card, it
+        stops highlighting.
+    */
+
      sealed class UNO_Game {
 
         #region Global Variables
@@ -19,6 +25,8 @@
         // Keeps track of the turns where a player couldn't do anything.
         static bool voidTurn = false; // a turn where a player can play no cards or draw from the deck is considered void
         static int stalled = 0; // count of how many players couldn't move in a row
+
+        static bool highlight = false;
 
         // Keeps track of both the shared deck and the status of all players.
         static Stack<Card> sharedDeck = []; // where every player pulls new cards from
@@ -49,6 +57,7 @@
                 currentNumber = -9;
                 voidTurn = false;
                 stalled = 0;
+                highlight = false;
                 sharedDeck.Clear();
                 allPlayers.Clear();
             }
@@ -253,11 +262,15 @@
             static void ViewCards() {
                 Console.WriteLine("Here's your cards.");
                 
-                string display = "";
                 int ind = 1;
                 
                 foreach(Card card in GetDeck()) {
-                    display += $" || ({ind}) { card.effect switch {
+
+                    bool hl = highlight && EvaluateCard(card);
+
+                    if (hl) Console.ForegroundColor = ConsoleColor.Green;
+
+                    string display = $" || ({ind}) { card.effect switch {
                         Kind.Normal => $"{Enum.GetName(card.suit)} {card.number}",
                         Kind.Skip => $"{Enum.GetName(card.suit)} Skip",
                         Kind.Reverse => $"{Enum.GetName(card.suit)} Reverse",
@@ -267,12 +280,15 @@
                         _ => ""
                     }} || ";
 
+                    Console.Write(display);
+
+                    if (hl) Console.ResetColor();
+
                     ind++;
                 }
 
-                Console.WriteLine(display);
 
-                Console.Write("What will you do? ");
+                if (!highlight) Console.Write("\nWhat will you do? ");
             }
 
             /// <summary>
@@ -317,7 +333,13 @@
                                     cardIndex = index;
                                     canPlay = true;
                                 }
-                                else Console.WriteLine("Can't play that one; doesn't match either the last card's color or number. "); 
+                                else { 
+                                    Console.WriteLine("Can't play that one; doesn't match either the last card's color or number.\n"); 
+                                    await Task.Delay(1000);
+
+                                    if(!highlight) highlight = true;
+                                    ViewCards();
+                                }
                             }
                             else {
                                 // If you are getting ready to play a wild card...
@@ -503,7 +525,10 @@
                 while(!allPlayers.Any(pl => pl.Value.Count == 0) && stalled < allPlayers.Count) {
                     
                     if(GetPlayer().type == Player.Type.CPU) await CPUTurn();
-                    else await YourTurn();
+                    else { 
+                        await YourTurn(); 
+                        if (highlight) highlight = false;
+                    }
 
                     // If you or a CPU did nothing this turn, no card is removed from your hands.
                     if(!voidTurn) { 
@@ -529,7 +554,7 @@
                 else {
                     // If too many void turns have been taken in a row, the game ends in a draw.
                     
-                    Console.WriteLine($"\nSince no one can play their cards, the game has to end in a{(allPlayers.Count > 2 ? $" {allPlayers.Count}-way" : " ")}draw.");
+                    Console.WriteLine($"\nSince no one can play their cards, the game has to end in a {(allPlayers.Count > 2 ? $" {allPlayers.Count}-way" : " ")} draw.");
                 }
 
                 // Give the player the option to play again if they want. 
