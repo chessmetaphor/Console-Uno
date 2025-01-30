@@ -4,6 +4,9 @@
         Known issue: Sometimes the text highlighting doesn't work.
         It does at first, but when a turn comes when the CPU don't play a card, it
         stops highlighting.
+
+        If I run into that again i'll fix it. But for now I got it mostly working?
+        Wild cards also weren't highlighted at all at first lol
     */
 
      sealed class UNO_Game {
@@ -261,12 +264,12 @@
             /// </summary>
             static void ViewCards() {
                 Console.WriteLine("Here's your cards.");
-                
+                bool hl;
                 int ind = 1;
                 
                 foreach(Card card in GetDeck()) {
 
-                    bool hl = highlight && EvaluateCard(card);
+                    hl = highlight && ( card.suit == Suit.Black || EvaluateCard(card) );
 
                     if (hl) Console.ForegroundColor = ConsoleColor.Green;
 
@@ -287,8 +290,7 @@
                     ind++;
                 }
 
-
-                if (!highlight) Console.Write("\nWhat will you do? ");
+                Console.Write($"\n{ (highlight ? "" : "What will you do? ") }");
             }
 
             /// <summary>
@@ -525,10 +527,7 @@
                 while(!allPlayers.Any(pl => pl.Value.Count == 0) && stalled < allPlayers.Count) {
                     
                     if(GetPlayer().type == Player.Type.CPU) await CPUTurn();
-                    else { 
-                        await YourTurn(); 
-                        if (highlight) highlight = false;
-                    }
+                    else await YourTurn(); 
 
                     // If you or a CPU did nothing this turn, no card is removed from your hands.
                     if(!voidTurn) { 
@@ -539,6 +538,8 @@
                         voidTurn = false;
                         stalled++;
                     }
+
+                    if (highlight) highlight = false;
                 }
 
                 if(stalled < allPlayers.Count) {
