@@ -1,54 +1,83 @@
-﻿namespace Uno_Game {
+﻿using System.Globalization;
 
-    /*
-        Known issue: Sometimes the text highlighting doesn't work.
-        It does at first, but when a turn comes when the CPU don't play a card, it
-        stops highlighting.
+namespace Uno_Game {
 
-        If I run into that again i'll fix it. But for now I got it mostly working?
-        Wild cards also weren't highlighted at all at first lol
+    /* Anywhere it says "shared deck" is called the Draw Pile. Literally couldnt think of the name the entire time i was making this
+        knew it had a name it NEVER came to me
+        couldve looked it up eons ago but ddfsfafaklghf
+
+        Also whyyyyy can the cpus still pick unassigned as their color when they play wildcards that should be literally impossible
     */
 
      sealed class UNO_Game {
+
+        #region Class Members
+
+        public enum Suit { Red, Blue, Green, Yellow, Black, Unassigned }
+
+        public enum Kind { Normal, Skip, Reverse, Draw_2, Wild, Draw_4 }
+
+         /// <summary>
+        /// All cards are objects with an assigned number, color, and effect.
+        /// </summary>
+        struct Card(Suit suit, Kind effect, int number) {
+            public int number = number;
+            public Suit suit = suit;
+            public Kind effect = effect;
+        }
+
+        /// <summary>
+        /// Every player has a name, and a marker for whether they are a player or CPU.
+        /// </summary>
+        /// <param name="name">The name of whoever's playing.</param>
+        /// <param name="tp">The marker for whether a player is you or a CPU.</param>
+        struct Player(string name, Player.Type tp) {
+            public string name = name;
+            public Type type = tp;
+
+            public enum Type { YOU, CPU }
+        } 
+
+        #endregion
+
+        // =====================================================================================
 
         #region Global Variables
 
         // Keeps track of whose turn it is
         static int playerIndex; 
-        static bool reverseOrder = false; // changes when a reverse card is played
+        static bool reverseOrder = false;
+
 
         // The color and number of the last played card.
         static Suit currentColor = Suit.Unassigned;
         static int currentNumber = -9;
 
+
         // Where to remove the last played card.
         static int listIndex; // from whose hand
         static int removeIndex; // spot in the hand the card occupies 
 
+
         // Keeps track of the turns where a player couldn't do anything.
         static bool voidTurn = false; // a turn where a player can play no cards or draw from the deck is considered void
-        static int stalled = 0; // count of how many players couldn't move in a row
+        static int stalled = 0; // count of how many void turns occurred in a row
+        static bool highlight = false; // Marks cards that you can play green when you pick a wrong one.
 
-        static bool highlight = false;
 
         // Keeps track of both the shared deck and the status of all players.
         static Stack<Card> sharedDeck = []; // where every player pulls new cards from
         static Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
-
-        public enum Suit { Red, Blue, Green, Yellow, Black, Unassigned }
-
-        public enum Kind { Normal, Skip, Reverse, Draw_2, Wild, Draw_4 }
-        
         #endregion
 
         // =====================================================================================
 
-        #region Gameplay Methods & Tasks
+        #region Gameplay Tasks
 
             // =============================================================================
             
-            #region Game Builder Methods 
+            #region Game Initializer Methods 
 
             /// <summary>
             /// Sets the global variables back to their default values, and clears every existing card in the game (from sharedDeck) and every existing player.
@@ -70,24 +99,51 @@
             /// </summary>
             /// <returns></returns>
             async static Task CreatePlayers() {
-                // Give the number of CPUs you want to play against.
+                int playerNum = 0; 
+                do {
+                    // Give the number of CPUs you want to play against.
 
-                Console.WriteLine("How many are playing? (Answer 2 - 10.)");
-                int playerNum = Math.Clamp(Convert.ToInt32(Console.ReadLine()), 2, 10);
+                    Console.WriteLine("How many are playing? (Answer 2 - 10.)");
+                    string nm = Console.ReadLine();
 
-                Console.WriteLine($"Generating {playerNum} players and starting the game.");
+                    if(int.TryParse(nm, out int ans)) {
+                        playerNum = Math.Clamp(ans, 2, 10);
+
+                        Console.WriteLine($"Generating {playerNum} players and starting the game.");
 
 
-                // Start building the dictionary that stores all players and their deck of cards.
+                        // Start building the dictionary that stores all players and their deck of cards.
 
-                allPlayers.Add(new Player("You", Player.Type.YOU), []);
+                        allPlayers.Add(new Player("You", Player.Type.YOU), []);
 
-                for(int p = 1; p < playerNum; p++) { 
-                    string name = $"Player {p + 1}";
-                    allPlayers.Add(new Player(name, Player.Type.CPU), []); 
-                    Console.WriteLine($"{name} joined you.");
-                }
-                
+                        for(int p = 1; p < playerNum; p++) { 
+                            string name = $"Player {p + 1}";
+                            allPlayers.Add(new Player(name, Player.Type.CPU), []); 
+                            Console.WriteLine($"{name} joined you.");
+                        }   
+                    }
+                    else {
+                        Console.WriteLine("Just give an answer 2 through 10.");
+                        await Task.Delay(1000);
+                    }
+
+                    //int p = Math.Clamp(Convert.ToInt32(Console.ReadLine()), 2, 10);
+
+                    // Console.WriteLine($"Generating {playerNum} players and starting the game.");
+
+
+                    // // Start building the dictionary that stores all players and their deck of cards.
+
+                    // allPlayers.Add(new Player("You", Player.Type.YOU), []);
+
+                    // for(int p = 1; p < playerNum; p++) { 
+                    //     string name = $"Player {p + 1}";
+                    //     allPlayers.Add(new Player(name, Player.Type.CPU), []); 
+                    //     Console.WriteLine($"{name} joined you.");
+                    // }
+
+                } while (playerNum == 0);
+
                 await Task.Delay(3000);
             }
 
@@ -121,7 +177,7 @@
 
                 await Task.Delay(1000);
 
-                // Now we can shuffle our cards with LINQ!
+                // Shuffle the cards.
                 builder = [..builder.OrderBy(_=> rnd.Next())];
 
                 // Push every card we created to the sharedDeck.
@@ -475,19 +531,22 @@
 
         // =====================================================================================
 
-        // This is the gameplay loop.
         async static Task Main() {
             int wins = 0;
             bool noMore = false;
 
             do {
-                // Create players and their decks first.
+
+                #region Create
+
+                // Create players.
 
                 await Task.Run(CreatePlayers);
 
-                // Decide whose going first: you or a CPU player.
+                // Decide whose going first: you or a CPU.
 
                 string answer = string.Empty;
+        
                 do {
                     Console.WriteLine("\nAre you dealing? (Y/N)");
 
@@ -512,17 +571,40 @@
 
                 } while(answer == string.Empty);
 
+                answer = string.Empty;
+
+                #endregion
+
+                #region Deal
+
+                // The player's hands are filled with 7 cards at the start of the game.
+
                 Console.WriteLine("Distributing cards. Please wait...");
 
                 await Task.Run(CardDistribution);
 
+                Card firstCard = sharedDeck.Pop();
+                currentColor = firstCard.suit;
+                currentNumber = firstCard.number;
+                string desc = firstCard.suit switch
+                {
+                    Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
+                    _ => $"{currentColor} {(firstCard.effect == Kind.Normal ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))} "
+                };
+
+                Console.WriteLine(desc + " added to the discard pile.");
+                
+                await Task.Delay(900);
+                
                 Console.WriteLine("Let's start the game...");
 
                 await Task.Delay(1500);
 
-                // =============================================================================
+                #endregion
             
-                // The gameplay loop runs as long as every player still has cards.
+                #region Play
+
+                // The game runs as long as every player still has cards.
 
                 while(!allPlayers.Any(pl => pl.Value.Count == 0) && stalled < allPlayers.Count) {
                     
@@ -558,9 +640,12 @@
                     Console.WriteLine($"\nSince no one can play their cards, the game has to end in a {(allPlayers.Count > 2 ? $" {allPlayers.Count}-way" : " ")} draw.");
                 }
 
+                #endregion
+
+                #region Finish
+
                 // Give the player the option to play again if they want. 
 
-                string anotherRound = string.Empty;
                 do {
                     Console.WriteLine("\nDo you want to play again? (Y/N)");
 
@@ -570,50 +655,25 @@
                         case "Y":
                             Console.WriteLine("Starting another round.");
                             ResetGame();
-                            anotherRound = "!";
+                            answer = "!";
                             break;
                         case "N":
                             noMore = true;
-                            anotherRound = "!";
+                            answer = "!";
                             break;
                         default:
                             Console.WriteLine("Answer the question. (Y/N)");
                             break;
                     }
 
-                } while (anotherRound == string.Empty);
+                } while (answer == string.Empty);
+
+                #endregion
 
             } while(!noMore);
 
             Console.WriteLine($"\n ~~~ Game complete! You won {wins} {(wins == 1? "time" : "times")}. ~~~");
         }
-    
-        // =====================================================================================
-
-        #region Nested Structs
-
-        /// <summary>
-        /// All cards are objects with an assigned number, color, and effect.
-        /// </summary>
-        struct Card(Suit suit, Kind effect, int number)
-        {
-            public int number = number;
-            public Suit suit = suit;
-            public Kind effect = effect;
-        }
-
-        /// <summary>
-        /// Every player has a name, and a marker for whether they are a player or CPU.
-        /// </summary>
-        /// <param name="name">The name of whoever's playing.</param>
-        /// <param name="tp">The marker for whether a player is you or a CPU.</param>
-        struct Player(string name, Player.Type tp) {
-            public string name = name;
-            public Type type = tp;
-
-            public enum Type { YOU, CPU }
-        } 
-
-        #endregion
     } 
+
 }
