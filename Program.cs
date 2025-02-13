@@ -2,16 +2,13 @@
 
 namespace Uno_Game {
 
-    /* Anywhere it says "shared deck" is called the Draw Pile. Literally couldnt think of the name the entire time i was making this
-        knew it had a name it NEVER came to me
-        couldve looked it up eons ago but ddfsfafaklghf
-
-        Also whyyyyy can the cpus still pick unassigned as their color when they play wildcards that should be literally impossible
+    /* 
+        why can the cpus suddenly choose colors they shouldn't be able to i hate coding
     */
 
      sealed class UNO_Game {
 
-        #region Class Members
+        #region Cards & Players
 
         public enum Suit { Red, Blue, Green, Yellow, Black, Unassigned }
 
@@ -65,8 +62,8 @@ namespace Uno_Game {
         static bool highlight = false; // Marks cards that you can play green when you pick a wrong one.
 
 
-        // Keeps track of both the shared deck and the status of all players.
-        static Stack<Card> sharedDeck = []; // where every player pulls new cards from
+        // Keeps track of the status of the draw pile and all players.
+        static Stack<Card> drawPile = []; // where every player pulls new cards from
         static Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
         #endregion
@@ -80,7 +77,8 @@ namespace Uno_Game {
             #region Game Initializer Methods 
 
             /// <summary>
-            /// Sets the global variables back to their default values, and clears every existing card in the game (from sharedDeck) and every existing player.
+            /// Sets the global variables back to their default values.
+            /// Clears every existing player and every existing card in the game from the draw pile.
             /// This is all done before the start of a brand new game.
             /// </summary>
             static void ResetGame() {
@@ -90,7 +88,7 @@ namespace Uno_Game {
                 voidTurn = false;
                 stalled = 0;
                 highlight = false;
-                sharedDeck.Clear();
+                drawPile.Clear();
                 allPlayers.Clear();
             }
 
@@ -127,21 +125,6 @@ namespace Uno_Game {
                         await Task.Delay(1000);
                     }
 
-                    //int p = Math.Clamp(Convert.ToInt32(Console.ReadLine()), 2, 10);
-
-                    // Console.WriteLine($"Generating {playerNum} players and starting the game.");
-
-
-                    // // Start building the dictionary that stores all players and their deck of cards.
-
-                    // allPlayers.Add(new Player("You", Player.Type.YOU), []);
-
-                    // for(int p = 1; p < playerNum; p++) { 
-                    //     string name = $"Player {p + 1}";
-                    //     allPlayers.Add(new Player(name, Player.Type.CPU), []); 
-                    //     Console.WriteLine($"{name} joined you.");
-                    // }
-
                 } while (playerNum == 0);
 
                 await Task.Delay(3000);
@@ -156,39 +139,41 @@ namespace Uno_Game {
                 Random rnd = new();
 
                 foreach(Suit suit in Enum.GetValues(typeof(Suit))) {
-                    if (suit == Suit.Black) break; // We only need this loop for the first four colors
+                    if (suit == Suit.Black) break; // We only need this loop for the first four colors.
 
-                    // Create a wild card and a draw 4 card first (both black)
+                    // Create a wild card and a draw 4 card. Since this foreach loop runs four times, there will be four in total for both kinds.
                     builder.Add(new Card(Suit.Black, Kind.Wild, -5));
                     builder.Add(new Card(Suit.Black, Kind.Draw_4, -4));
 
-                    // Create two skips, reverses, and draw 2s
+                    // A for loop that runs twice. Out of it, we get two skips, reverses, and draw 2s, AND two sets of numbered cards 1 thorugh 10.
                     for(int d = 0; d < 2; d++) {
                         builder.Add(new Card(suit, Kind.Skip, -3));
                         builder.Add(new Card(suit, Kind.Reverse, -2));
                         builder.Add(new Card(suit, Kind.Draw_2, -1));
 
-                        // for loop for numbered cards
+                        // For loop for numbered cards, 1 through 10.
                         for(int n = 1; n < 10; n++) builder.Add(new Card(suit, Kind.Normal, n));
                     }
 
+                    // Finally, every RGBY suit has one 0 card.
                     builder.Add(new Card(suit, Kind.Normal, 0));
                 }
 
                 await Task.Delay(1000);
 
-                // Shuffle the cards.
+
+                // Shuffle all the cards.
                 builder = [..builder.OrderBy(_=> rnd.Next())];
 
-                // Push every card we created to the sharedDeck.
-                foreach (Card card in builder) sharedDeck.Push(card);
+                // Push every card we created to the draw pile.
+                foreach (Card card in builder) drawPile.Push(card);
+
 
                 await Task.Delay(1000);
 
                 // Finally, give the players their cards.
-                foreach(List<Card> decks in allPlayers.Values) {
-                    for(int a = 0; a < 7; a++) decks.Add(sharedDeck.Pop());
-                }
+                foreach(List<Card> decks in allPlayers.Values)
+                    for(int a = 0; a < 7; a++) decks.Add(drawPile.Pop());
             }
 
             #endregion
@@ -235,8 +220,8 @@ namespace Uno_Game {
             /// Add a new card from the shared deck to the current player's hand.
             /// </summary>
             static void AddCard() {
-                if(sharedDeck.Count > 0) {
-                    GetDeck().Add(sharedDeck.Pop());
+                if(drawPile.Count > 0) {
+                    GetDeck().Add(drawPile.Pop());
                     Console.WriteLine($"\n>> {GetPlayer().name} drew a card. {(GetPlayer().type == Player.Type.YOU ? "Your" : "Their")} card count is now {GetDeck().Count}.");
                 }
                 else {
@@ -284,7 +269,7 @@ namespace Uno_Game {
                     case Kind.Draw_2:
                         Console.WriteLine($"{currentColor} Draw 2! {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw two cards!");
 
-                        for(int d = 0; d < Math.Clamp(sharedDeck.Count, 1, 2); d++) AddCard();
+                        for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 2); d++) AddCard();
                         
                         UpdatePlayerIndex();
                     break;
@@ -292,7 +277,7 @@ namespace Uno_Game {
                     case Kind.Draw_4:
                         Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards! The new color is {Enum.GetName(currentColor)}.");
                         
-                        for(int d = 0; d < Math.Clamp(sharedDeck.Count, 1, 4); d++) AddCard();
+                        for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 4); d++) AddCard();
 
                         UpdatePlayerIndex();
                     break;
@@ -316,7 +301,7 @@ namespace Uno_Game {
             #region Turn Methods
 
             /// <summary>
-            /// Draws your cards to the console, both at the start of your turn, and whenever you grab a new card.
+            /// Draws your cards to the console.
             /// </summary>
             static void ViewCards() {
                 Console.WriteLine("Here's your cards.");
@@ -476,7 +461,7 @@ namespace Uno_Game {
                         // See all the cards that are wilds in the deck.
                         var eval = GetDeck().Where(e => e.suit == Suit.Black);
 
-                        // If there are ONLY wild cards, a random one is grabbed from the deck and a random color is picked.
+                        // If there are ONLY wild cards, a random one is grabbed from the deck and a random RGBY color is picked.
                         if(GetDeck().Count - eval.Count() == 0) {
                             int choice = rnd.Next(4);
                             currentColor = (Suit)choice;
@@ -498,15 +483,14 @@ namespace Uno_Game {
                                 
                             currentColor = amounts.OrderByDescending(x => x.Value).ToList().First().Key;
                         
-
-                            // Then it will draw a random wildcard.
+                            // THEN it will draw a random wildcard.
 
                             cardIndex = GetDeck().IndexOf(eval.ElementAt(rnd.Next(eval.Count())));
                             
                             playCard = true;
                         }
                     }
-                    else if(sharedDeck.Count > 0) {
+                    else if(drawPile.Count > 0) {
                         AddCard();
                     }
                     else {
@@ -583,19 +567,23 @@ namespace Uno_Game {
 
                 await Task.Run(CardDistribution);
 
-                Card firstCard = sharedDeck.Pop();
+                // Start the discard pile with the card at the top of the draw pile.
+
+                Card firstCard = drawPile.Pop();
                 currentColor = firstCard.suit;
                 currentNumber = firstCard.number;
-                string desc = firstCard.suit switch
-                {
-                    Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
-                    _ => $"{currentColor} {(firstCard.effect == Kind.Normal ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))} "
-                };
 
-                Console.WriteLine(desc + " added to the discard pile.");
+                Console.WriteLine($">> {firstCard.suit switch {
+            
+                    Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
+                    _ => $"{currentColor} {(firstCard.effect == Kind.Normal ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))}" 
+                    }
+
+                } added to the discard pile.");
                 
                 await Task.Delay(900);
-                
+
+
                 Console.WriteLine("Let's start the game...");
 
                 await Task.Delay(1500);
