@@ -1,9 +1,8 @@
-﻿using System.Globalization;
-
+﻿
 namespace Uno_Game {
 
     /* 
-        why can the cpus suddenly choose colors they shouldn't be able to i hate coding
+       I THINK I FIGURED IT OUT AHAHAHAHAHA
     */
 
      sealed class UNO_Game {
@@ -187,7 +186,7 @@ namespace Uno_Game {
             /// </summary>
             /// <param name="toPlay">Pass any card from any deck to see if it can be played this turn. </param>
             /// <returns>True: It CAN be played. False: It CAN'T be played.</returns>
-            static bool EvaluateCard(Card toPlay) => toPlay.suit.Equals(currentColor) || toPlay.number == currentNumber || currentColor == Suit.Unassigned;
+            static bool EvaluateCard(Card toPlay) => toPlay.suit.Equals(currentColor) || toPlay.number == currentNumber;
 
             /// <summary>
             /// Quick way to grab the current player from the dictionary.
@@ -200,6 +199,19 @@ namespace Uno_Game {
             /// </summary>
             /// <returns>A list containing all the cards in the current player's deck.</returns>
             static List<Card> GetDeck() => allPlayers.ElementAt(playerIndex).Value;
+
+            static Suit RecommendColor() {
+                Dictionary<Suit, int> amounts = new() {
+                        {Suit.Red, 0},
+                        {Suit.Blue, 0},
+                        {Suit.Green, 0},
+                        {Suit.Yellow, 0}
+                };
+
+                foreach(Card card in GetDeck().Where(d => !d.suit.Equals(Suit.Black))) amounts[card.suit] += 1;
+                                
+                return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
+            }
 
             // =========================================
 
@@ -454,46 +466,50 @@ namespace Uno_Game {
                         
                         cardIndex = eval[rnd.Next(eval.Count)];
 
+                        // If a wildcard was picked, then the recommended color is chosen.
+                        currentColor = RecommendColor();
+
                         playCard = true;
                     }
                     else if(GetDeck().Any(n => n.suit == Suit.Black)) {
                     
-                        // See all the cards that are wilds in the deck.
+                        // Gather all the wildcards in the deck if there are no numbered cards that can be played.
                         var eval = GetDeck().Where(e => e.suit == Suit.Black);
 
                         // If there are ONLY wild cards, a random one is grabbed from the deck and a random RGBY color is picked.
+
                         if(GetDeck().Count - eval.Count() == 0) {
-                            int choice = rnd.Next(4);
-                            currentColor = (Suit)choice;
-                            
+                            // If that wildcard was their last card, there's no need to assign a color at all.
+
+                            if(GetDeck().Count == 1)
+                                currentColor = Suit.Unassigned;
+                            else {
+                                Random rd = new();
+                                int choice = rd.Next(4);
+                                currentColor = (Suit)choice;
+                            }
+                           
                             cardIndex = rnd.Next(GetDeck().Count);
                             playCard = true;
                         }
                         else {
-                            // If there are more than just wild cards in their deck, the CPU will pick the RGBY color it has the most of.
-
-                            Dictionary<Suit, int> amounts = new() {
-                                {Suit.Red, 0},
-                                {Suit.Blue, 0},
-                                {Suit.Green, 0},
-                                {Suit.Yellow, 0}
-                            };
-
-                            foreach(Card card in GetDeck().Where(d => !d.suit.Equals(Suit.Black))) amounts[card.suit] += 1;
-                                
-                            currentColor = amounts.OrderByDescending(x => x.Value).ToList().First().Key;
-                        
-                            // THEN it will draw a random wildcard.
-
-                            cardIndex = GetDeck().IndexOf(eval.ElementAt(rnd.Next(eval.Count())));
                             
-                            playCard = true;
+                            // A random wildcard will be grabbed from the deck after determining the color the CPU has the most of.
+                           currentColor = RecommendColor();
+
+                           cardIndex = GetDeck().IndexOf(eval.ElementAt(rnd.Next(eval.Count())));
+                            
+                           playCard = true;
                         }
                     }
                     else if(drawPile.Count > 0) {
+                        // If there are no wildcards at all and no numbered cards that can be played, the CPU draws a card from the deck.
+
                         AddCard();
                     }
                     else {
+                        // If there are no playable cards AND the draw pile is empty, their turn is considered void.
+
                         Console.WriteLine($"\n>> {GetPlayer().name} can't play at all this turn.");
                         voidTurn = true;
                         break;
@@ -573,13 +589,16 @@ namespace Uno_Game {
                 currentColor = firstCard.suit;
                 currentNumber = firstCard.number;
 
-                Console.WriteLine($">> {firstCard.suit switch {
+                // Describe what just entered the discard pile. The underscores in Draw_2 and 4 should be gone
+                string desc = $">> {firstCard.suit switch {
             
                     Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
                     _ => $"{currentColor} {(firstCard.effect == Kind.Normal ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))}" 
                     }
 
-                } added to the discard pile.");
+                } added to the discard pile.";
+
+                Console.WriteLine(desc.Replace('_',' '));
                 
                 await Task.Delay(900);
 
