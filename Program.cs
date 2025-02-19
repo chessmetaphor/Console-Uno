@@ -68,6 +68,8 @@
 
         // Keeps track of the status of the draw pile and all players.
         static Stack<Card> drawPile = []; // where every player pulls new cards from
+        static Stack<Card> discardPile = []; // where all cards that were played go
+
         static Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
         #endregion
@@ -172,7 +174,6 @@
                 // Push every card we created to the draw pile.
                 foreach (Card card in builder) drawPile.Push(card);
 
-
                 await Task.Delay(1000);
 
                 // Finally, give the players their cards.
@@ -199,6 +200,9 @@
             /// </summary>
             /// <returns>A list containing all the cards in the current player's deck.</returns>
             static List<Card> GetDeck() => allPlayers.ElementAt(playerIndex).Value;
+
+            static List<Card> GetDeck(int which) => allPlayers.ElementAt(which).Value;
+
 
             /// <summary>
             /// In the list of all players that exist in the game, this is the index of the one whose going next.
@@ -322,6 +326,11 @@
                     break;
                 }
             
+                // Remove the last card from the last player's deck and move it to the discard pile.
+                discardPile.Push(GetDeck(listIndex)[removeIndex]);
+
+                GetDeck(listIndex).RemoveAt(removeIndex);
+
                 await Task.Delay(0);
             }
             
@@ -357,10 +366,6 @@
                 }
 
                 Console.Write($"\n{ (highlight ? "" : "What will you do? ") }");
-            }
-
-            static void ShuffleCards(List<Card> shuffleThese) {
-
             }
 
             #endregion
@@ -639,7 +644,8 @@
 
                 // Start the discard pile with the card at the top of the draw pile.
                
-                Card firstCard = drawPile.Pop();
+                discardPile.Push(drawPile.Pop());
+                Card firstCard = discardPile.Peek();
                 currentColor = firstCard.suit;
                 currentNumber = firstCard.number;
 
@@ -667,39 +673,33 @@
 
                 // The game runs as long as every player still has cards.
 
-                while(!allPlayers.Any(pl => pl.Value.Count == 0) && stalled < allPlayers.Count) {
+                while(!allPlayers.Any(pl => pl.Value.Count == 0)) {
                     
                     if(GetPlayer().type == Player.Type.CPU) await CPUTurn();
                     else await YourTurn(); 
 
-                    // If you or a CPU did nothing this turn, no card is removed from your hands.
-                    if(!voidTurn) { 
-                        allPlayers.ElementAt(listIndex).Value.RemoveAt(removeIndex);
-                        if(stalled > 0) stalled = 0;
-                    }
-                    else { 
+                    // If you or a CPU did nothing this turn, the turn is considered void.
+                    if(voidTurn) { 
                         voidTurn = false;
                         stalled++;
-                    }
-
-                    if (highlight) highlight = false;
-                }
-
-                if(stalled < allPlayers.Count) {
-                    // When the loop ends, the player with no cards is announced as the winner, then this game is over.
-
-                    var winner = allPlayers.First(pl => pl.Value.Count == 0);
-                
-                
-                    Console.WriteLine($"\n ~~~ GAME OVER! {winner.Key.name} won. ~~~ ");
-
-                    if(winner.Key.type == Player.Type.YOU) wins++;
-                }
-                else {
-                    // If too many void turns have been taken in a row, the game ends in a draw.
+                    }   
+                    else 
+                        if(stalled > 0) stalled = 0;
                     
-                    Console.WriteLine($"\nSince no one can play their cards, the game has to end in a {(allPlayers.Count > 2 ? $" {allPlayers.Count}-way" : " ")} draw.");
+                    if (highlight) highlight = false;
+
+                    // If it's determined that absolutely no one can play this turn, the cards in the discard pile should be reshuffled and added to the draw pile.
+                    if(stalled > allPlayers.Count) {
+                        Console.Write("oh whoops lol");
+                    }
                 }
+
+                var winner = allPlayers.First(pl => pl.Value.Count == 0);
+                
+                Console.WriteLine($"\n ~~~ GAME OVER! {winner.Key.name} won. ~~~ ");
+
+                if(winner.Key.type == Player.Type.YOU) wins++;
+                
 
                 #endregion
 
