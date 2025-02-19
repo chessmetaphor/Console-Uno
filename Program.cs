@@ -8,6 +8,9 @@
         Gotta give you the choice to include Swap and Shuffle Hands next
         - I went my whole life not knowing uno had a score system lol
         - Reverse should work like the Skip card if there's two players, it's kinda pointless atm
+
+
+        RIGHT NOWWWW I need to reshuiffle the discard pile and add the cards back into the draw pile if the whole game stalls
     */
 
      sealed class UNO_Game {
@@ -65,12 +68,13 @@
         static int stalled = 0; // count of how many void turns occurred in a row
         static bool highlight = false; // Marks cards that you can play green when you pick a wrong one.
 
+        static List<Card> builder = [];
 
         // Keeps track of the status of the draw pile and all players.
-        static Stack<Card> drawPile = []; // where every player pulls new cards from
-        static Stack<Card> discardPile = []; // where all cards that were played go
+        static readonly Stack<Card> drawPile = []; // where every player pulls new cards from
+        static readonly Stack<Card> discardPile = []; // where all cards that were played go
 
-        static Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
+        static readonly Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
         #endregion
 
@@ -95,6 +99,7 @@
                 stalled = 0;
                 highlight = false;
                 drawPile.Clear();
+                discardPile.Clear();
                 allPlayers.Clear();
             }
 
@@ -141,8 +146,7 @@
             /// </summary>
             /// <returns></returns> 
             async static Task CreateCards() {
-                List<Card> builder = [];
-                Random rnd = new();
+                builder.Clear();
 
                 foreach(Suit suit in Enum.GetValues(typeof(Suit))) {
                     if (suit == Suit.Black) break; // We only need this loop for the first four colors.
@@ -165,20 +169,27 @@
                     builder.Add(new Card(suit, Kind.Normal, 0));
                 }
 
-                await Task.Delay(1000);
-
-
-                // Shuffle all the cards.
-                builder = [..builder.OrderBy(_=> rnd.Next())];
-
-                // Push every card we created to the draw pile.
-                foreach (Card card in builder) drawPile.Push(card);
-
-                await Task.Delay(1000);
+                await Task.Run(RebuildDrawPile);
 
                 // Finally, give the players their cards.
                 foreach(List<Card> decks in allPlayers.Values)
                     for(int a = 0; a < 7; a++) decks.Add(drawPile.Pop());
+
+                await Task.Delay(500);
+            }
+
+            async static Task RebuildDrawPile() {
+                Random rnd = new();
+
+                // Shuffle all the cards.
+                builder = [..builder.OrderBy(_=> rnd.Next())];
+
+                // Push every discarded card back to the draw pile.
+                foreach (Card card in builder) drawPile.Push(card);
+
+                builder.Clear();
+
+                await Task.Delay(1000);
             }
 
             #endregion
@@ -190,17 +201,22 @@
             // ========================================= Lookup
 
             /// <summary>
-            /// Quick way to grab the current player from the dictionary.
+            /// 
             /// </summary>
             /// <returns>The player whose turn it is.</returns>
             static Player GetPlayer() => allPlayers.ElementAt(playerIndex).Key;
 
             /// <summary>
-            /// Quick way to grab the current player's deck from the dictionary.
+            /// 
             /// </summary>
-            /// <returns>A list containing all the cards in the current player's deck.</returns>
+            /// <returns>The deck of the current player.</returns>
             static List<Card> GetDeck() => allPlayers.ElementAt(playerIndex).Value;
 
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="which">The index of the player the deck belongs to</param>
+            /// <returns>The deck of the player at this index in the dictionary.</returns>
             static List<Card> GetDeck(int which) => allPlayers.ElementAt(which).Value;
 
 
@@ -326,12 +342,15 @@
                     break;
                 }
             
+
                 // Remove the last card from the last player's deck and move it to the discard pile.
+
                 discardPile.Push(GetDeck(listIndex)[removeIndex]);
 
                 GetDeck(listIndex).RemoveAt(removeIndex);
 
-                await Task.Delay(0);
+
+                await Task.Delay(50);
             }
             
             /// <summary>
@@ -678,6 +697,8 @@
                     if(GetPlayer().type == Player.Type.CPU) await CPUTurn();
                     else await YourTurn(); 
 
+                    if (highlight) highlight = false;
+
                     // If you or a CPU did nothing this turn, the turn is considered void.
                     if(voidTurn) { 
                         voidTurn = false;
@@ -685,12 +706,19 @@
                     }   
                     else 
                         if(stalled > 0) stalled = 0;
-                    
-                    if (highlight) highlight = false;
 
-                    // If it's determined that absolutely no one can play this turn, the cards in the discard pile should be reshuffled and added to the draw pile.
+                    // If it's determined that absolutely no one can play anymore, the cards in the discard pile should be reshuffled and added to the draw pile.
                     if(stalled > allPlayers.Count) {
-                        Console.Write("oh whoops lol");
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"\nRan out of cards to play! Reshuffling...");
+                        Console.ResetColor();
+
+                        while(discardPile.Count > 0) builder.Add(discardPile.Pop());
+
+                        await Task.Run(RebuildDrawPile);
+
+                        stalled = 0;
+                        voidTurn = false;
                     }
                 }
 
