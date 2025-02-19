@@ -138,7 +138,7 @@
             /// Fills out each player's deck at the start of the game.
             /// </summary>
             /// <returns></returns> 
-            async static Task CardDistribution() {
+            async static Task CreateCards() {
                 List<Card> builder = [];
                 Random rnd = new();
 
@@ -185,13 +185,8 @@
             // =============================================================================
 
             #region Action Methods
-
-            /// <summary>
-            /// Check to see if a card can be played at all this turn.
-            /// </summary>
-            /// <param name="toPlay">Pass any card from any deck to see if it can be played this turn. </param>
-            /// <returns>True: It CAN be played. False: It CAN'T be played.</returns>
-            static bool EvaluateCard(Card toPlay) => toPlay.suit.Equals(currentColor) || toPlay.number == currentNumber;
+            
+            // ========================================= Lookup
 
             /// <summary>
             /// Quick way to grab the current player from the dictionary.
@@ -206,15 +201,44 @@
             static List<Card> GetDeck() => allPlayers.ElementAt(playerIndex).Value;
 
             /// <summary>
+            /// In the list of all players that exist in the game, this is the index of the one whose going next.
+            /// </summary>
+            /// <returns></returns>
+            static int NextPlayerIndex() {
+                int p = !reverseOrder ? playerIndex + 1 : playerIndex - 1; 
+
+                if(p >= allPlayers.Count) return 0;
+                else if(p < 0) return allPlayers.Count - 1; 
+
+                return p;
+            }
+
+            /// <summary>
+            /// The global player index is incremented or decremented based on the players' order.
+            /// </summary>  
+            static void UpdatePlayerIndex() {
+                playerIndex = NextPlayerIndex();
+            }
+
+            // ========================================= Decide
+            
+            /// <summary>
+            /// Check to see if a card can be played at all this turn.
+            /// </summary>
+            /// <param name="toPlay">Pass any card from any deck to see if it can be played this turn. </param>
+            /// <returns>True: It CAN be played. False: It CAN'T be played.</returns>
+            static bool EvaluateCard(Card toPlay) => toPlay.suit.Equals(currentColor) || toPlay.number == currentNumber;
+
+            /// <summary>
             /// Returns what color card the current CPU has the most of.
             /// </summary>
             /// <returns></returns>
             static Suit RecommendColor() {
                 Dictionary<Suit, int> amounts = new() {
-                        {Suit.Red, 0},
-                        {Suit.Blue, 0},
-                        {Suit.Green, 0},
-                        {Suit.Yellow, 0}
+                    {Suit.Red, 0},
+                    {Suit.Blue, 0},
+                    {Suit.Green, 0},
+                    {Suit.Yellow, 0}
                 };
 
                 foreach(Card card in GetDeck().Where(d => !d.suit.Equals(Suit.Black))) amounts[card.suit] += 1;
@@ -222,20 +246,7 @@
                 return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
             }
 
-            // =========================================
-
-            /// <summary>
-            /// The global player index is incremented or decremented based on the players' order.
-            /// </summary>  
-            static void UpdatePlayerIndex() {
-                
-                playerIndex = !reverseOrder ? playerIndex + 1 : playerIndex - 1; 
-
-                if(playerIndex >= allPlayers.Count) {
-                    playerIndex = 0;
-                }
-                else if(playerIndex < 0) playerIndex = allPlayers.Count - 1;
-            }
+            // ========================================= Act
 
             /// <summary>
             /// Add a new card from the shared deck to the current player's hand.
@@ -313,13 +324,7 @@
             
                 await Task.Delay(0);
             }
-
-            #endregion
-
-            // =============================================================================
-
-            #region Turn Methods
-
+            
             /// <summary>
             /// Draws your cards to the console.
             /// </summary>
@@ -354,6 +359,16 @@
                 Console.Write($"\n{ (highlight ? "" : "What will you do? ") }");
             }
 
+            static void ShuffleCards(List<Card> shuffleThese) {
+
+            }
+
+            #endregion
+
+            // =============================================================================
+
+            #region Turn Tasks
+          
             /// <summary>
             /// The instructions for your turn. The game will wait for you to choose a valid card, and a new color when you play a wild card.
             /// </summary>
@@ -589,7 +604,7 @@
                 do {
                     Console.WriteLine("\nAre you dealing? (Y/N)");
 
-                    string choose = Console.ReadLine();
+                    string choose = Console.ReadLine()?.ToUpper();
 
                     switch(choose) {
                         case "Y":
@@ -616,11 +631,11 @@
 
                 #region Deal
 
-                // The player's hands are filled with 7 cards at the start of the game.
+                // The players' hands are filled with 7 cards at the start of the game.
 
                 Console.WriteLine("Distributing cards. Please wait...");
 
-                await Task.Run(CardDistribution);
+                await Task.Run(CreateCards);
 
                 // Start the discard pile with the card at the top of the draw pile.
                
@@ -695,7 +710,7 @@
                 do {
                     Console.WriteLine("\nDo you want to play again? (Y/N)");
 
-                    string r_answer = Console.ReadLine();
+                    string r_answer = Console.ReadLine()?.ToUpper();
 
                     switch(r_answer) {
                         case "Y":
