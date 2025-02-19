@@ -1,8 +1,12 @@
 ﻿
+using System.Text;
+
 namespace Uno_Game {
 
     /* 
-       I THINK I FIGURED IT OUT AHAHAHAHAHA
+       If the first card that palys is a Draw 4 or Wild...
+       > Check to see if the CPUs still pick a non-RGBY color. They shouldn't, ever.
+       > So far its been 2 Reds
     */
 
      sealed class UNO_Game {
@@ -200,6 +204,10 @@ namespace Uno_Game {
             /// <returns>A list containing all the cards in the current player's deck.</returns>
             static List<Card> GetDeck() => allPlayers.ElementAt(playerIndex).Value;
 
+            /// <summary>
+            /// Returns what color card the current CPU has the most of.
+            /// </summary>
+            /// <returns></returns>
             static Suit RecommendColor() {
                 Dictionary<Suit, int> amounts = new() {
                         {Suit.Red, 0},
@@ -234,7 +242,7 @@ namespace Uno_Game {
             static void AddCard() {
                 if(drawPile.Count > 0) {
                     GetDeck().Add(drawPile.Pop());
-                    Console.WriteLine($"\n>> {GetPlayer().name} drew a card. {(GetPlayer().type == Player.Type.YOU ? "Your" : "Their")} card count is now {GetDeck().Count}.");
+                    if(GetPlayer().type == Player.Type.CPU) Console.WriteLine($"\n>> {GetPlayer().name} drew a card. Their card count is now {GetDeck().Count}.");
                 }
                 else {
                     Console.WriteLine("\n>> There are no more cards that can be pulled...");
@@ -252,6 +260,7 @@ namespace Uno_Game {
 
                 Console.Write($"\n>> {GetPlayer().name} ({GetDeck().Count - 1}): ");
 
+
                 // Change the current color and number to the card that was played then moved on to the next player.
 
                 listIndex = playerIndex;
@@ -265,7 +274,8 @@ namespace Uno_Game {
 
                 UpdatePlayerIndex();
 
-                // Perform the card's effect.
+
+                // Perform the last card's effect on this player.
 
                 switch(playThis.effect) {
                     
@@ -275,7 +285,7 @@ namespace Uno_Game {
                     break;
 
                     case Kind.Reverse:
-                        Console.WriteLine($"A {Enum.GetName(currentColor)} Reverse card?! It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn again!");
+                        Console.WriteLine($"A {Enum.GetName(currentColor)} Reverse card?! It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn!");
                     break;
 
                     case Kind.Draw_2:
@@ -362,66 +372,90 @@ namespace Uno_Game {
                    or the number of the card you want to play.
                 */
                 do {
-                   string input = Console.ReadLine();
+                   string input = Console.ReadLine()?.ToUpper();
                    
                    switch(input) {
                         case "ADD":
-                        AddCard();
-                        await Task.Delay(1500);
+                            AddCard();
+                            Console.WriteLine($"You drew a card. Your total is {GetDeck().Count}.");
+                            
+                            await Task.Delay(1500);
 
-                        ViewCards();
+                            ViewCards();
+                        break;
+
+                        case "QUICKADD":
+                            int count = 0;
+                            while(drawPile.Count > 0) {
+                                AddCard();
+                                count++;
+                                if(GetDeck().Any(EvaluateCard) || GetDeck().Any(s => s.suit == Suit.Black)) break;
+                            }
+
+                            if(count > 0) Console.WriteLine($"You pulled {count} more card{(count == 1 ? "." : "s.")}");
+
+                            await Task.Delay(1500);
+
+                            ViewCards();
                         break;
 
                         case "END":
-                        earlyBreak = true;
-                        voidTurn = true;
+                            earlyBreak = true;
+                            voidTurn = true;
                         break;
 
                         default:
-                        if(int.TryParse(input, out int num)) {
-                            // Evaluate the card that was chosen before setting the card index and canPlay to true.
+                            if(int.TryParse(input, out int num)) {
+                                // Evaluate the card that was chosen to see if it can be played.
 
-                            int index = Math.Clamp(num - 1, 0, GetDeck().Count - 1);
+                                int index = Math.Clamp(num - 1, 0, GetDeck().Count - 1);
 
-                            if(GetDeck()[index].suit != Suit.Black) {
-                                if(EvaluateCard(GetDeck()[index])) { 
+                                if(GetDeck()[index].suit != Suit.Black) {
+                                    if(EvaluateCard(GetDeck()[index])) { 
+                                        cardIndex = index;
+                                        canPlay = true;
+                                    }
+                                    else { 
+                                        Console.WriteLine("Can't play that one; doesn't match either the last card's color or number.\n"); 
+                                        await Task.Delay(1000);
+
+                                        if(!highlight) highlight = true;
+                                        ViewCards();
+                                    }
+                                }
+                                else {
+                                    // If you are getting ready to play a wild card...
+                                    if(GetDeck().Count > 1) {
+                                        Console.Write("You chose a wild card! What color card should the next player put down? ");
+
+                                        // The program will wait for you to input a RGBY color.
+
+                                        while(true) {
+                                            string c_input = Console.ReadLine();
+
+                                            if(Enum.TryParse(c_input, out Suit result)) {
+                                                if(!result.Equals(Suit.Black) && !result.Equals(Suit.Unassigned)) {
+                                                    currentColor = result;
+                                                    break;
+                                                }
+                                                else Console.WriteLine("That can't be used. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
+                                            }
+                                            else Console.WriteLine("Invalid input. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
+                                        }
+                                    }
+                                    else {
+                                        Console.ForegroundColor = ConsoleColor.Yellow;
+                                        Console.WriteLine("You're finishing things off with a wildcard!");
+                                        Console.ResetColor();
+                                        currentColor = Suit.Unassigned;
+                                    }
+
                                     cardIndex = index;
                                     canPlay = true;
                                 }
-                                else { 
-                                    Console.WriteLine("Can't play that one; doesn't match either the last card's color or number.\n"); 
-                                    await Task.Delay(1000);
-
-                                    if(!highlight) highlight = true;
-                                    ViewCards();
-                                }
                             }
-                            else {
-                                // If you are getting ready to play a wild card...
-
-                                Console.Write("You chose a wild card! What color card should the next player put down? ");
-
-                                // The program will wait for you to input a RGBY color.
-
-                                while(true) {
-                                    string c_input = Console.ReadLine();
-
-                                    if(Enum.TryParse(c_input, out Suit result)) {
-                                        if(!result.Equals(Suit.Black) && !result.Equals(Suit.Unassigned)) {
-                                            currentColor = result;
-                                            break;
-                                        }
-                                        else Console.WriteLine("That can't be used. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
-                                    }
-                                    else Console.WriteLine("Invalid input. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
-                                }
-
-                                cardIndex = index;
-                                canPlay = true;
-                            }
-                        }
-                        else Console.WriteLine("Invalid input. Try typing 'ADD' for a new card, the number next to a card you might want to play, or 'END' to skip your turn. ");
-                        
+                            else Console.WriteLine("Invalid input. Try typing 'ADD' for a new card, the number next to a card you might want to play, or 'END' to skip your turn. ");
+                            
                         break;
                    }
 
@@ -459,7 +493,7 @@ namespace Uno_Game {
                 
                 do {
                     if(GetDeck().Any(EvaluateCard)) {
-                        // Picks a random card out of every one that can be played on this turn.
+                        // Picks a random card out of every one of them that can be played on this turn.
                         List<int> eval = [];
 
                         foreach(Card crd in GetDeck().Where(EvaluateCard)) eval.Add(GetDeck().IndexOf(crd));
