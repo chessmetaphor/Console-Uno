@@ -1,13 +1,4 @@
-﻿
-using System.Text;
-
-namespace Uno_Game {
-
-    /* 
-       If the first card that palys is a Draw 4 or Wild...
-       > Check to see if the CPUs still pick a non-RGBY color. They shouldn't, ever.
-       > So far its been 2 Reds
-    */
+﻿namespace Uno_Game {
 
      sealed class UNO_Game {
 
@@ -240,13 +231,10 @@ namespace Uno_Game {
             /// Add a new card from the shared deck to the current player's hand.
             /// </summary>
             static void AddCard() {
-                if(drawPile.Count > 0) {
+                if(drawPile.Count > 0) 
                     GetDeck().Add(drawPile.Pop());
-                    if(GetPlayer().type == Player.Type.CPU) Console.WriteLine($"\n>> {GetPlayer().name} drew a card. Their card count is now {GetDeck().Count}.");
-                }
-                else {
+                else 
                     Console.WriteLine("\n>> There are no more cards that can be pulled...");
-                }
             }
 
             /// <summary>
@@ -367,8 +355,11 @@ namespace Uno_Game {
                 bool earlyBreak = false;
                 int cardIndex = 0;
 
-                /* While you don't have a card to play:
-                   The program will wait for your input. You can type in ADD for a new card. END to end your turn,
+                /* 
+                   The program will wait for your input. 
+                   You can type in ADD for a new card. 
+                   Type Q ADD to pull multiple cards until you get one you can play.
+                   END to end your turn,
                    or the number of the card you want to play.
                 */
                 do {
@@ -377,14 +368,14 @@ namespace Uno_Game {
                    switch(input) {
                         case "ADD":
                             AddCard();
-                            Console.WriteLine($"You drew a card. Your total is {GetDeck().Count}.");
+                            Console.WriteLine($"\n>> You drew a card.");
                             
                             await Task.Delay(1500);
 
                             ViewCards();
                         break;
 
-                        case "QUICKADD":
+                        case "Q ADD":
                             int count = 0;
                             while(drawPile.Count > 0) {
                                 AddCard();
@@ -392,7 +383,7 @@ namespace Uno_Game {
                                 if(GetDeck().Any(EvaluateCard) || GetDeck().Any(s => s.suit == Suit.Black)) break;
                             }
 
-                            if(count > 0) Console.WriteLine($"You pulled {count} more card{(count == 1 ? "." : "s.")}");
+                            Console.WriteLine($"\n>> You pulled {count} card{(count == 1 ? "." : "s.")}");
 
                             await Task.Delay(1500);
 
@@ -416,7 +407,7 @@ namespace Uno_Game {
                                         canPlay = true;
                                     }
                                     else { 
-                                        Console.WriteLine("Can't play that one; doesn't match either the last card's color or number.\n"); 
+                                        Console.WriteLine("Can't play that one; doesn't match either the last card's color or number. "); 
                                         await Task.Delay(1000);
 
                                         if(!highlight) highlight = true;
@@ -478,6 +469,7 @@ namespace Uno_Game {
             async static Task CPUTurn() {
                 bool playCard = false;
                 int cardIndex = 0;
+                int added = 0;
                 Random rnd = new();
 
                 /* Checks:
@@ -540,6 +532,7 @@ namespace Uno_Game {
                         // If there are no wildcards at all and no numbered cards that can be played, the CPU draws a card from the deck.
 
                         AddCard();
+                        added++;
                     }
                     else {
                         // If there are no playable cards AND the draw pile is empty, their turn is considered void.
@@ -550,6 +543,8 @@ namespace Uno_Game {
                     }
 
                 } while(!playCard);
+
+                if(added > 0) Console.WriteLine($"\n>> {GetPlayer().name} pulled {added} more card{(added == 1 ? "." : "s.")}");
 
                 if(playCard) await PlayCard(GetDeck()[cardIndex]);
                 else UpdatePlayerIndex();
