@@ -1,5 +1,15 @@
 ﻿namespace Uno_Game {
 
+    /*
+        There's some rules left to incorporate!
+        - The first card in the discard pile needs to effect the person whose going first if it's an action card.
+        - The game is not supposed to end in a draw like it does here. Everything in the discard pile must be reshuffled to form a new draw pile.
+        - There's new cards that let you swap decks with other players holy wow
+        Gotta give you the choice to include Swap and Shuffle Hands next
+        - I went my whole life not knowing uno had a score system lol
+        - Reverse should work like the Skip card if there's two players, it's kinda pointless atm
+    */
+
      sealed class UNO_Game {
 
         #region Cards & Players
@@ -360,7 +370,7 @@
                    You can type in ADD for a new card. 
                    Type Q ADD to pull multiple cards until you get one you can play.
                    END to end your turn,
-                   or the number of the card you want to play.
+                   or the number in parentheses next to the card you want to play.
                 */
                 do {
                    string input = Console.ReadLine()?.ToUpper();
@@ -613,12 +623,12 @@
                 await Task.Run(CardDistribution);
 
                 // Start the discard pile with the card at the top of the draw pile.
-
+               
                 Card firstCard = drawPile.Pop();
                 currentColor = firstCard.suit;
                 currentNumber = firstCard.number;
 
-                // Describe what just entered the discard pile. The underscores in Draw_2 and 4 should be gone
+                // Describe what just entered the discard pile.
                 string desc = $">> {firstCard.suit switch {
             
                     Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
@@ -628,7 +638,7 @@
                 } added to the discard pile.";
 
                 Console.WriteLine(desc.Replace('_',' '));
-                
+               
                 await Task.Delay(900);
 
 
