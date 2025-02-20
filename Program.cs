@@ -10,7 +10,9 @@
         - Reverse should work like the Skip card if there's two players, it's kinda pointless atm
 
 
-        RIGHT NOWWWW I need to reshuiffle the discard pile and add the cards back into the draw pile if the whole game stalls
+        RIGHT NOWWWW I need to reshuffle the discard pile and add the cards back into the draw pile if the whole game stalls
+        ALSOOOO whenever a wildcard is drawn first the CPUs will keep pulling until they get another black card
+        so a random color needs to be chosen at the start so they aren't just pulling forever until they get one
     */
 
      sealed class UNO_Game {
@@ -68,11 +70,11 @@
         static int stalled = 0; // count of how many void turns occurred in a row
         static bool highlight = false; // Marks cards that you can play green when you pick a wrong one.
 
-        static List<Card> builder = [];
-
+       
         // Keeps track of the status of the draw pile and all players.
         static readonly Stack<Card> drawPile = []; // where every player pulls new cards from
         static readonly Stack<Card> discardPile = []; // where all cards that were played go
+        private static List<Card> builder = []; // temporary list for cards that are being reshuffled
 
         static readonly Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
@@ -170,26 +172,80 @@
                 }
 
                 await Task.Run(RebuildDrawPile);
-
-                // Finally, give the players their cards.
-                foreach(List<Card> decks in allPlayers.Values)
-                    for(int a = 0; a < 7; a++) decks.Add(drawPile.Pop());
-
-                await Task.Delay(500);
             }
 
             async static Task RebuildDrawPile() {
-                Random rnd = new();
+                if(builder.Count == 0) Console.WriteLine("Failed to reshuffle...");
+                else {
+                    Random rnd = new();
 
-                // Shuffle all the cards.
-                builder = [..builder.OrderBy(_=> rnd.Next())];
+                    // Shuffle all the cards.
+                    builder = [..builder.OrderBy(_=> rnd.Next())];
 
-                // Push every discarded card back to the draw pile.
-                foreach (Card card in builder) drawPile.Push(card);
+                    // Push every discarded card back to the draw pile.
+                    foreach (Card card in builder) drawPile.Push(card);
 
-                builder.Clear();
+                    builder.Clear();
+                }
 
                 await Task.Delay(1000);
+            }
+
+            /* Before the game can start, something needs to happen depending on the card's effect. 
+                    If a Draw 4 was discarded, place it back in the draw pile and reshuffle it. Do this until a draw 4 does NOT appear again.
+                    (DONE!)
+
+                    If it was a skip card, update the player index.
+                    If it was a reverse card, set reverseOrder to true.
+                    If its a Draw 2, Pop() two cards from the draw pile into the current player's deck then update the player index.
+                    If its a wildcard, you get to choose the color if you chose to deal. Otherwise, the CPUs get to choose with RecommendColor().
+                    You don't have to update the player index.
+                    You'll have to swap the decks and cards among specific players when you implement the new cards too.
+                */
+
+            async static Task RebuildDiscardPile() {
+                // Take the card at the top of the draw pile and discard it.
+                discardPile.Push(drawPile.Pop());
+                
+                // If a Draw 4 was discarded, add it back into the deck and reshuffle.
+                switch(discardPile.Peek().effect) {
+                    case Kind.Draw_4:
+                        bool reroll = true;
+
+                        while(reroll) {
+                            Console.WriteLine("\n>> A Draw 4 was discarded. Reshuffling...");
+
+                            builder.Clear();
+                            drawPile.Push(discardPile.Pop());
+
+                            while(drawPile.Count > 0) builder.Add(drawPile.Pop());
+
+                            await Task.Run(RebuildDrawPile);
+
+                            discardPile.Push(drawPile.Pop());
+                            
+                            if(discardPile.Peek().effect != Kind.Draw_4) reroll = false; 
+                        }
+                    break;
+                }
+
+                // Describe what just entered the discard pile.
+
+                Card firstCard = discardPile.Peek();
+                currentColor = firstCard.suit;
+                currentNumber = firstCard.number;
+                
+                string desc = $">> {firstCard.suit switch {
+                
+                    Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
+                    _ => $"{currentColor} {(firstCard.effect == Kind.Normal ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))}" 
+                    }
+
+                } added to the discard pile.";
+
+                Console.WriteLine(desc.Replace('_',' '));
+
+                await Task.Delay(0);
             }
 
             #endregion
@@ -615,7 +671,7 @@
 
             do {
 
-                #region Create
+                #region Init
 
                 // Create players.
 
@@ -661,26 +717,13 @@
 
                 await Task.Run(CreateCards);
 
+                // Give the players their cards.
+                foreach(List<Card> decks in allPlayers.Values)
+                    for(int a = 0; a < 7; a++) decks.Add(drawPile.Pop());
+
                 // Start the discard pile with the card at the top of the draw pile.
                
-                discardPile.Push(drawPile.Pop());
-                Card firstCard = discardPile.Peek();
-                currentColor = firstCard.suit;
-                currentNumber = firstCard.number;
-
-                // Describe what just entered the discard pile.
-                string desc = $">> {firstCard.suit switch {
-            
-                    Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
-                    _ => $"{currentColor} {(firstCard.effect == Kind.Normal ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))}" 
-                    }
-
-                } added to the discard pile.";
-
-                Console.WriteLine(desc.Replace('_',' '));
-               
-                await Task.Delay(900);
-
+                await Task.Run(RebuildDiscardPile);
 
                 Console.WriteLine("Let's start the game...");
 
@@ -710,7 +753,7 @@
                     // If it's determined that absolutely no one can play anymore, the cards in the discard pile should be reshuffled and added to the draw pile.
                     if(stalled > allPlayers.Count) {
                         Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine($"\nRan out of cards to play! Reshuffling...");
+                        Console.WriteLine($"\nNo one's playing! Reshuffling...");
                         Console.ResetColor();
 
                         while(discardPile.Count > 0) builder.Add(discardPile.Pop());
