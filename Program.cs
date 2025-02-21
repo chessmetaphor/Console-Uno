@@ -208,27 +208,32 @@ namespace Uno_Game {
             async static Task RebuildDiscardPile() {
                 // Take the card at the top of the draw pile and discard it.
                 discardPile.Push(drawPile.Pop());
-                
+
                 // If a Draw 4 was discarded, add it back into the deck and reshuffle.
-                switch(discardPile.Peek().effect) {
-                    case Kind.Draw_4:
-                        bool reroll = true;
 
-                        while(reroll) {
-                            Console.WriteLine("\n>> A Draw 4 was discarded. Reshuffling...");
+                if(discardPile.Peek().effect == Kind.Draw_4) {
+                    bool reroll = true;
 
-                            builder.Clear();
-                            drawPile.Push(discardPile.Pop());
+                    while(reroll) {
+                        Console.WriteLine("\n>> A Draw 4 was discarded. Reshuffling...");
 
-                            while(drawPile.Count > 0) builder.Add(drawPile.Pop());
+                        builder.Clear();
+                        drawPile.Push(discardPile.Pop());
 
-                            await Task.Run(RebuildDrawPile);
+                        while(drawPile.Count > 0) builder.Add(drawPile.Pop());
 
-                            discardPile.Push(drawPile.Pop());
+                        await Task.Run(RebuildDrawPile);
+
+                        discardPile.Push(drawPile.Pop());
                             
-                            if(discardPile.Peek().effect != Kind.Draw_4) reroll = false; 
-                        }
-                    break;
+                        if(discardPile.Peek().effect != Kind.Draw_4) reroll = false; 
+                    }
+                }
+
+
+                // Any cards discarded first (and after a draw 4 and reshuffle) affects the first player.
+
+                switch(discardPile.Peek().effect) {
 
                     case Kind.Skip:
                         UpdatePlayerIndex();
@@ -248,6 +253,8 @@ namespace Uno_Game {
                         currentColor = RecommendColor();
                     break;
                 }
+
+
 
                 // Describe what just entered the discard pile.
 
