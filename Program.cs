@@ -227,6 +227,24 @@
                             if(discardPile.Peek().effect != Kind.Draw_4) reroll = false; 
                         }
                     break;
+
+                    case Kind.Skip:
+                        UpdatePlayerIndex();
+                    break;
+
+                    case Kind.Reverse:
+                        reverseOrder = true;
+                        UpdatePlayerIndex();
+                    break;
+
+                    case Kind.Draw_2:
+                        for(int d = 0; d < 2; d++) AddCard();
+                        UpdatePlayerIndex();
+                    break;
+
+                    case Kind.Wild:
+                        currentColor = RecommendColor();
+                    break;
                 }
 
                 // Describe what just entered the discard pile.
@@ -243,7 +261,7 @@
 
                 } added to the discard pile.";
 
-                Console.WriteLine(desc.Replace('_',' '));
+                Console.WriteLine(desc.Replace('_',' ') + $"{ (firstCard.effect == Kind.Wild ? $"The first color is {currentColor}." : string.Empty) }" );
 
                 await Task.Delay(0);
             }
@@ -751,7 +769,7 @@
                         if(stalled > 0) stalled = 0;
 
                     // If it's determined that absolutely no one can play anymore, the cards in the discard pile should be reshuffled and added to the draw pile.
-                    if(stalled > allPlayers.Count) {
+                    if(stalled > allPlayers.Count - 1) {
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         Console.WriteLine($"\nNo one's playing! Reshuffling...");
                         Console.ResetColor();
