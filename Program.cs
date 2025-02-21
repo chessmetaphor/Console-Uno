@@ -1,20 +1,11 @@
-﻿using System.Formats.Asn1;
-
-namespace Uno_Game {
+﻿namespace Uno_Game {
 
     /*
         There's some rules left to incorporate!
-        - The first card in the discard pile needs to effect the person whose going first if it's an action card.
-        - The game is not supposed to end in a draw like it does here. Everything in the discard pile must be reshuffled to form a new draw pile.
+        - The CPUs should be more conservative with their draw 4s They choose them only when there are no wild cards, or if the next player after them has 5 or less cards.
         - There's new cards that let you swap decks with other players holy wow
         Gotta give you the choice to include Swap and Shuffle Hands next
         - I went my whole life not knowing uno had a score system lol
-        - Reverse should work like the Skip card if there's two players, it's kinda pointless atm
-
-
-        RIGHT NOWWWW I need to reshuffle the discard pile and add the cards back into the draw pile if the whole game stalls
-        ALSOOOO whenever a wildcard is drawn first the CPUs will keep pulling until they get another black card
-        so a random color needs to be chosen at the start so they aren't just pulling forever until they get one
     */
 
      sealed class UNO_Game {
@@ -211,29 +202,28 @@ namespace Uno_Game {
 
                 // If a Draw 4 was discarded, add it back into the deck and reshuffle.
 
-                if(discardPile.Peek().effect == Kind.Draw_4) {
-                    bool reroll = true;
+                while(discardPile.Peek().effect == Kind.Draw_4) {
+                    
+                    Console.WriteLine("\n>> A Draw 4 was discarded. Reshuffling...");
 
-                    while(reroll) {
-                        Console.WriteLine("\n>> A Draw 4 was discarded. Reshuffling...");
+                    builder.Clear();
+                    drawPile.Push(discardPile.Pop());
 
-                        builder.Clear();
-                        drawPile.Push(discardPile.Pop());
+                    while(drawPile.Count > 0) builder.Add(drawPile.Pop());
 
-                        while(drawPile.Count > 0) builder.Add(drawPile.Pop());
+                    await Task.Run(RebuildDrawPile);
 
-                        await Task.Run(RebuildDrawPile);
-
-                        discardPile.Push(drawPile.Pop());
-                            
-                        if(discardPile.Peek().effect != Kind.Draw_4) reroll = false; 
-                    }
+                    discardPile.Push(drawPile.Pop());
                 }
+
+                Card firstCard = discardPile.Peek();
+                if (firstCard.effect != Kind.Wild) currentColor = firstCard.suit;
+                currentNumber = firstCard.number;
 
 
                 // Any cards discarded first (and after a draw 4 and reshuffle) affects the first player.
 
-                switch(discardPile.Peek().effect) {
+                switch(firstCard.effect) {
 
                     case Kind.Skip:
                         UpdatePlayerIndex();
@@ -255,12 +245,7 @@ namespace Uno_Game {
                 }
 
 
-
                 // Describe what just entered the discard pile.
-
-                Card firstCard = discardPile.Peek();
-                if (firstCard.effect != Kind.Wild) currentColor = firstCard.suit;
-                currentNumber = firstCard.number;
                 
                 string desc = $">> {firstCard.suit switch {
                 
@@ -270,7 +255,8 @@ namespace Uno_Game {
 
                 } added to the discard pile.";
 
-                Console.WriteLine(desc.Replace('_',' ') + $"{ (firstCard.effect == Kind.Wild ? $"The first color is {currentColor}." : string.Empty) }" );
+                Console.WriteLine(desc.Replace('_',' ') + $"{ (firstCard.effect == Kind.Wild ? $" The first color is {currentColor}." : string.Empty) }" );
+
 
                 await Task.Delay(0);
             }
@@ -568,9 +554,8 @@ namespace Uno_Game {
                                         }
                                     }
                                     else {
-                                        Console.ForegroundColor = ConsoleColor.Yellow;
-                                        Console.WriteLine("You're finishing things off with a wildcard!");
-                                        Console.ResetColor();
+                                        Console.WriteLine("\nYou're finishing things off with a wildcard!");
+                                       
                                         currentColor = Suit.Unassigned;
                                     }
 
@@ -605,15 +590,15 @@ namespace Uno_Game {
                 int added = 0;
                 Random rnd = new();
 
-                /* Checks:
-                    If they have any normal cards match the color or number of the last played card with EvaluateCard(). If they do, play any card that matches.
+                /* Tasks:
+                    ICheck if the CPU has any normal cards that match the color or number of the last played card with EvaluateCard(). If they do, play any card that matches.
 
-                    Check if there is any wild cards. If there are, play either a wild or draw 4 at random, 
+                    Check if there are any wild cards. If there are, play either a wild or draw 4 at random, 
                     after changing the current color to what the CPU has the most of.
 
-                    If the CPU has no wildcards or normal cards they can play, check if there are any cards still in the shared deck. Just call addcard().
+                    If the CPU has no wildcards or normal cards they can play, check if there are any cards still in the draw pile that can be added to their deck.
 
-                    If there's no more cards they can pull, there's literally nothing the CPU can do. Their turn is void, so the do-while loop breaks.
+                    If the draw pile is empty, there's literally nothing the CPU can do. Their turn is considered void.
                 */
                 
                 do {
@@ -632,13 +617,13 @@ namespace Uno_Game {
                     }
                     else if(GetDeck().Any(n => n.suit == Suit.Black)) {
                     
-                        // Gather all the wildcards in the deck if there are no numbered cards that can be played.
+                        // Gather all the black cards in the deck if there are no numbered cards that can be played.
                         var eval = GetDeck().Where(e => e.suit == Suit.Black);
 
-                        // If there are ONLY wild cards, a random one is grabbed from the deck and a random RGBY color is picked.
+                        // If there are ONLY black cards, a random RGBY color is picked. Otherwise, the color of non-wild cards they have the most of is picked.
 
                         if(GetDeck().Count - eval.Count() == 0) {
-                            // If that wildcard was their last card, there's no need to assign a color at all.
+                            // If their last card is a black card, there's no need to assign a color at all.
 
                             if(GetDeck().Count == 1)
                                 currentColor = Suit.Unassigned;
@@ -647,19 +632,24 @@ namespace Uno_Game {
                                 int choice = rd.Next(4);
                                 currentColor = (Suit)choice;
                             }
-                           
-                            cardIndex = rnd.Next(GetDeck().Count);
-                            playCard = true;
                         }
-                        else {
-                            
-                            // A random wildcard will be grabbed from the deck after determining the color the CPU has the most of.
+                        else    
+                           // A random wildcard will be grabbed from the deck after determining the color the CPU has the most of.
                            currentColor = RecommendColor();
 
-                           cardIndex = GetDeck().IndexOf(eval.ElementAt(rnd.Next(eval.Count())));
-                            
-                           playCard = true;
-                        }
+                        /* 
+                            If any of the black cards the CPU has are Draw 4s, and the next player is running low on cards, the CPU will use one. 
+                            It will use any random Draw 4 if there are no wild cards to choose from instead.
+                        */
+
+                        if(eval.Any(f => f.effect == Kind.Draw_4) && allPlayers.ElementAt(NextPlayerIndex()).Value.Count <= 5) 
+                            cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Draw_4));
+                        else if(eval.Any(w => w.effect == Kind.Wild)) 
+                            cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Wild));
+                        else 
+                            cardIndex = GetDeck().IndexOf(eval.ElementAt(rnd.Next(eval.Count())));
+
+                        playCard = true;
                     }
                     else if(drawPile.Count > 0) {
                         // If there are no wildcards at all and no numbered cards that can be played, the CPU draws a card from the deck.
@@ -765,8 +755,8 @@ namespace Uno_Game {
 
                 while(!allPlayers.Any(pl => pl.Value.Count == 0)) {
                     
-                    if(GetPlayer().type == Player.Type.CPU) await CPUTurn();
-                    else await YourTurn(); 
+                    if(GetPlayer().type == Player.Type.YOU) await YourTurn();
+                    else await CPUTurn(); 
 
                     if (highlight) highlight = false;
 
