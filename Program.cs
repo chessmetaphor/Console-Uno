@@ -1,4 +1,6 @@
-﻿namespace Uno_Game {
+﻿using System.Formats.Asn1;
+
+namespace Uno_Game {
 
     /*
         There's some rules left to incorporate!
@@ -195,11 +197,11 @@
                     If a Draw 4 was discarded, place it back in the draw pile and reshuffle it. Do this until a draw 4 does NOT appear again.
                     (DONE!)
 
-                    If it was a skip card, update the player index.
-                    If it was a reverse card, set reverseOrder to true.
-                    If its a Draw 2, Pop() two cards from the draw pile into the current player's deck then update the player index.
-                    If its a wildcard, you get to choose the color if you chose to deal. Otherwise, the CPUs get to choose with RecommendColor().
-                    You don't have to update the player index.
+                    If it was a skip card, update the player index. (DONE!)
+                    If it was a reverse card, set reverseOrder to true. (DONE!)
+                    If its a Draw 2, Pop() two cards from the draw pile into the current player's deck then update the player index. (DONE!)
+                    If its a wildcard, the current color is set with RecommendColor(). (DONE!)
+
                     You'll have to swap the decks and cards among specific players when you implement the new cards too.
                 */
 
@@ -250,7 +252,7 @@
                 // Describe what just entered the discard pile.
 
                 Card firstCard = discardPile.Peek();
-                currentColor = firstCard.suit;
+                if (firstCard.effect != Kind.Wild) currentColor = firstCard.suit;
                 currentNumber = firstCard.number;
                 
                 string desc = $">> {firstCard.suit switch {
@@ -388,6 +390,7 @@
                     break;
 
                     case Kind.Reverse:
+                        if (allPlayers.Count == 2) UpdatePlayerIndex();
                         Console.WriteLine($"A {Enum.GetName(currentColor)} Reverse card?! It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn!");
                     break;
 
