@@ -57,10 +57,6 @@
         static int listIndex; // from whose hand
         static int removeIndex; // spot in the hand the card occupies 
 
-
-        // Keeps track of the turns where a player couldn't do anything.
-        static bool voidTurn = false; // a turn where a player can play no cards or draw from the deck is considered void
-        static int stalled = 0; // count of how many void turns occurred in a row
         static bool highlight = false; // Marks cards that you can play green when you pick a wrong one.
 
        
@@ -90,8 +86,6 @@
                 reverseOrder = false;
                 currentColor = Suit.Unassigned;
                 currentNumber = -9;
-                voidTurn = false;
-                stalled = 0;
                 highlight = false;
                 drawPile.Clear();
                 discardPile.Clear();
@@ -319,6 +313,29 @@
             static bool EvaluateCard(Card toPlay) => toPlay.suit.Equals(currentColor) || toPlay.number == currentNumber;
 
             /// <summary>
+            /// Called at the start of every turn. If you or a CPU can't play, the draw pile gets rebuilt so you can pull a card from it and play it.
+            /// </summary>
+            /// <returns></returns>
+            async static Task EvaluateTurn() {
+                if(!GetDeck().Any(e => e.suit == Suit.Black || EvaluateCard(e)) && drawPile.Count == 0){
+                    Console.WriteLine("\n>> The draw pile is empty. Reshuffling...");
+                    await Task.Run(EmptyDiscardPile);
+                    if(drawPile.Count > 0) AddCard();
+                }
+            }
+
+
+            /// <summary>
+            /// Reshuffles the cards from the discard pile and adds them back into the draw pile.
+            /// </summary>
+            /// <returns></returns>
+            async static Task EmptyDiscardPile() {
+                while(discardPile.Count > 0) builder.Add(discardPile.Pop());
+
+                await Task.Run(RebuildDrawPile);
+            }
+
+             /// <summary>
             /// Returns what color card the current CPU has the most of.
             /// </summary>
             /// <returns></returns>
@@ -334,17 +351,7 @@
                                 
                 return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
             }
-
-            /// <summary>
-            /// Reshuffles the cards from the discard pile and adds them back into the draw pile.
-            /// </summary>
-            /// <returns></returns>
-            async static Task EmptyDiscardPile() {
-                while(discardPile.Count > 0) builder.Add(discardPile.Pop());
-
-                await Task.Run(RebuildDrawPile);
-            }
-
+            
             // ========================================= Act
 
             /// <summary>
@@ -481,17 +488,17 @@
                 ViewCards(); 
 
                 bool canPlay = false;
-                bool earlyBreak = false;
                 int cardIndex = 0;
 
                 /* 
                    The program will wait for your input. 
                    You can type in ADD for a new card. 
-                   Type Q ADD to pull multiple cards until you get one you can play.
-                   END to end your turn,
-                   or the number in parentheses next to the card you want to play.
+                   Type Q ADD to pull multiple cards until you get one you can play,
+                   or type the number in parentheses next to the card you want to play.
                 */
                 do {
+                   await Task.Run(EvaluateTurn);
+
                    string input = Console.ReadLine()?.ToUpper();
                    
                    switch(input) {
@@ -517,11 +524,6 @@
                             await Task.Delay(1500);
 
                             ViewCards();
-                        break;
-
-                        case "END":
-                            earlyBreak = true;
-                            voidTurn = true;
                         break;
 
                         default:
@@ -578,12 +580,9 @@
                         break;
                    }
 
-                   if(earlyBreak) break; 
-
                 } while(!canPlay); 
 
-                if(canPlay) await PlayCard(GetDeck()[cardIndex]);
-                else UpdatePlayerIndex();
+                await PlayCard(GetDeck()[cardIndex]);
 
                 await Task.Delay(2000);
             }
@@ -607,11 +606,11 @@
                     after changing the current color to what the CPU has the most of.
 
                     If the CPU has no wildcards or Numbered cards they can play, check if there are any cards still in the draw pile that can be added to their deck.
-
-                    If the draw pile is empty, there's literally nothing the CPU can do. Their turn is considered void.
                 */
                 
                 do {
+                    await Task.Run(EvaluateTurn);
+
                     if(GetDeck().Any(EvaluateCard)) {
                         // Picks a random card out of every one of them that can be played on this turn.
                         List<int> eval = [];
@@ -662,28 +661,20 @@
 
                         playCard = true;
                     }
-                    else if(drawPile.Count > 0) {
+                    else {
                         // If there are no wildcards at all and no numbered cards that can be played, the CPU draws a card from the deck.
 
                         AddCard();
                         added++;
-                    }
-                    else {
-                        // If there are no playable cards AND the draw pile is empty, their turn is considered void.
-
-                        Console.WriteLine($"\n>> {GetPlayer().name} can't play at all this turn. Reshuffling...");
-                        voidTurn = true;
-                        break;
                     }
 
                 } while(!playCard);
 
                 if(added > 0) Console.WriteLine($"\n>> {GetPlayer().name} pulled {added} more card{(added == 1 ? "." : "s.")}");
 
-                if(playCard) await PlayCard(GetDeck()[cardIndex]);
-                else UpdatePlayerIndex(); 
+                await PlayCard(GetDeck()[cardIndex]);
                 
-                await Task.Delay(4000);
+                await Task.Delay(2000);
             }
 
             #endregion
@@ -770,27 +761,6 @@
                     else await CPUTurn(); 
 
                     if (highlight) highlight = false;
-
-                    // If you or a CPU did nothing this turn, the turn is considered void.
-                    if(voidTurn) { 
-                        voidTurn = false;
-                        stalled++;
-                        await Task.Run(EmptyDiscardPile);
-                    }   
-                    else 
-                        if(stalled > 0) stalled = 0;
-
-                    // If it's determined that absolutely no one can play anymore, the cards in the discard pile should be reshuffled and added to the draw pile.
-                    if(stalled > allPlayers.Count - 1) {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine($"\nNo one's playing! Reshuffling...");
-                        Console.ResetColor();
-
-                        await Task.Run(EmptyDiscardPile);
-
-                        stalled = 0;
-                        voidTurn = false;
-                    }
                 }
 
                 var winner = allPlayers.First(pl => pl.Value.Count == 0);
