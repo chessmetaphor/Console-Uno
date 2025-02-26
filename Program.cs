@@ -2,10 +2,10 @@
 
     /*
         There's some rules left to incorporate!
-        - The CPUs should be more conservative with their draw 4s They choose them only when there are no wild cards, or if the next player after them has 5 or less cards.
         - There's new cards that let you swap decks with other players holy wow
         Gotta give you the choice to include Swap and Shuffle Hands next
         - I went my whole life not knowing uno had a score system lol
+        - The CPUs should have a small chance of forgetting to say UNO for fun lol
     */
 
      sealed class UNO_Game {
@@ -14,7 +14,7 @@
 
         public enum Suit { Red, Blue, Green, Yellow, Black, Unassigned }
 
-        public enum Kind { Normal, Skip, Reverse, Draw_2, Wild, Draw_4 }
+        public enum Kind { Numbered, Skip, Reverse, Draw_2, Wild, Draw_4 }
 
          /// <summary>
         /// All cards are objects with an assigned number, color, and effect.
@@ -157,18 +157,18 @@
                         builder.Add(new Card(suit, Kind.Draw_2, -1));
 
                         // For loop for numbered cards, 1 through 10.
-                        for(int n = 1; n < 10; n++) builder.Add(new Card(suit, Kind.Normal, n));
+                        for(int n = 1; n < 10; n++) builder.Add(new Card(suit, Kind.Numbered, n));
                     }
 
                     // Finally, every RGBY suit has one 0 card.
-                    builder.Add(new Card(suit, Kind.Normal, 0));
+                    builder.Add(new Card(suit, Kind.Numbered, 0));
                 }
 
                 await Task.Run(RebuildDrawPile);
             }
 
             async static Task RebuildDrawPile() {
-                if(builder.Count == 0) Console.WriteLine("Failed to reshuffle...");
+                if(builder.Count == 0) Console.WriteLine("There are no cards to reshuffle.");
                 else {
                     Random rnd = new();
 
@@ -181,7 +181,7 @@
                     builder.Clear();
                 }
 
-                await Task.Delay(1000);
+                await Task.Delay(900);
             }
 
             /* Before the game can start, something needs to happen depending on the card's effect. 
@@ -250,7 +250,7 @@
                 string desc = $">> {firstCard.suit switch {
                 
                     Suit.Black => $"{Enum.GetName(typeof(Kind), firstCard.effect)}",
-                    _ => $"{currentColor} {(firstCard.effect == Kind.Normal ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))}" 
+                    _ => $"{currentColor} {(firstCard.effect == Kind.Numbered ? currentNumber : Enum.GetName(typeof(Kind), firstCard.effect))}" 
                     }
 
                 } added to the discard pile.";
@@ -260,7 +260,7 @@
 
                 await Task.Delay(0);
             }
-
+            
             #endregion
 
             // =============================================================================
@@ -335,6 +335,16 @@
                 return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
             }
 
+            /// <summary>
+            /// Reshuffles the cards from the discard pile and adds them back into the draw pile.
+            /// </summary>
+            /// <returns></returns>
+            async static Task EmptyDiscardPile() {
+                while(discardPile.Count > 0) builder.Add(discardPile.Pop());
+
+                await Task.Run(RebuildDrawPile);
+            }
+
             // ========================================= Act
 
             /// <summary>
@@ -378,13 +388,13 @@
                 switch(playThis.effect) {
                     
                     case Kind.Skip:
-                        Console.WriteLine($"A {Enum.GetName(currentColor)} skip card?! {(GetPlayer().type == Player.Type.YOU ? "Your" : GetPlayer().name + "'s")} turn was skipped!");
+                        Console.WriteLine($"A {Enum.GetName(currentColor)} skip card! {(GetPlayer().type == Player.Type.YOU ? "Your" : GetPlayer().name + "'s")} turn was skipped.");
                         UpdatePlayerIndex();
                     break;
 
                     case Kind.Reverse:
                         if (allPlayers.Count == 2) UpdatePlayerIndex();
-                        Console.WriteLine($"A {Enum.GetName(currentColor)} Reverse card?! It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn!");
+                        Console.WriteLine($"A {Enum.GetName(currentColor)} Reverse card! It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn.");
                     break;
 
                     case Kind.Draw_2:
@@ -396,7 +406,7 @@
                     break;
 
                     case Kind.Draw_4:
-                        Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards! The new color is {Enum.GetName(currentColor)}.");
+                        Console.WriteLine($"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards! " + (currentColor != Suit.Unassigned? $"The new color is {Enum.GetName(currentColor)}." :  string.Empty));
                         
                         for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 4); d++) AddCard();
 
@@ -404,11 +414,11 @@
                     break;
 
                     case Kind.Wild:
-                        Console.WriteLine($"A wildcard was just played?! The new color is {Enum.GetName(currentColor)}.");
+                        Console.WriteLine($"A wildcard was played! " + (currentColor != Suit.Unassigned ? $"The new color is {Enum.GetName(currentColor)}." : string.Empty));
                     break;
 
-                    case Kind.Normal:
-                        Console.WriteLine($"A {Enum.GetName(currentColor)} {currentNumber} card was played.");
+                    case Kind.Numbered:
+                        Console.WriteLine($"A {Enum.GetName(currentColor)} {currentNumber} was played.");
                     break;
                 }
             
@@ -438,7 +448,7 @@
                     if (hl) Console.ForegroundColor = ConsoleColor.Green;
 
                     string display = $" || ({ind}) { card.effect switch {
-                        Kind.Normal => $"{Enum.GetName(card.suit)} {card.number}",
+                        Kind.Numbered => $"{Enum.GetName(card.suit)} {card.number}",
                         Kind.Skip => $"{Enum.GetName(card.suit)} Skip",
                         Kind.Reverse => $"{Enum.GetName(card.suit)} Reverse",
                         Kind.Draw_2 => $"{Enum.GetName(card.suit)} Draw 2",
@@ -591,12 +601,12 @@
                 Random rnd = new();
 
                 /* Tasks:
-                    ICheck if the CPU has any normal cards that match the color or number of the last played card with EvaluateCard(). If they do, play any card that matches.
+                    Check if the CPU has any Numbered cards that match the color or number of the last played card with EvaluateCard(). If they do, play any card that matches.
 
                     Check if there are any wild cards. If there are, play either a wild or draw 4 at random, 
                     after changing the current color to what the CPU has the most of.
 
-                    If the CPU has no wildcards or normal cards they can play, check if there are any cards still in the draw pile that can be added to their deck.
+                    If the CPU has no wildcards or Numbered cards they can play, check if there are any cards still in the draw pile that can be added to their deck.
 
                     If the draw pile is empty, there's literally nothing the CPU can do. Their turn is considered void.
                 */
@@ -610,17 +620,20 @@
                         
                         cardIndex = eval[rnd.Next(eval.Count)];
 
-                        // If a wildcard was picked, then the recommended color is chosen.
-                        currentColor = RecommendColor();
+                        // If a black card was picked, then the recommended color is chosen.
+                        if(GetDeck()[cardIndex].suit == Suit.Black) currentColor = RecommendColor();
 
                         playCard = true;
                     }
                     else if(GetDeck().Any(n => n.suit == Suit.Black)) {
                     
-                        // Gather all the black cards in the deck if there are no numbered cards that can be played.
+                        // Gather all the black cards in the deck.
                         var eval = GetDeck().Where(e => e.suit == Suit.Black);
 
-                        // If there are ONLY black cards, a random RGBY color is picked. Otherwise, the color of non-wild cards they have the most of is picked.
+                        /* 
+                            If there are ONLY black cards, a random RGBY color is picked.
+                            If there are black cards AND RGBY cards the CPU can't play, the color the CPU has the most of gets picked.
+                        */
 
                         if(GetDeck().Count - eval.Count() == 0) {
                             // If their last card is a black card, there's no need to assign a color at all.
@@ -633,9 +646,7 @@
                                 currentColor = (Suit)choice;
                             }
                         }
-                        else    
-                           // A random wildcard will be grabbed from the deck after determining the color the CPU has the most of.
-                           currentColor = RecommendColor();
+                        else currentColor = RecommendColor();
 
                         /* 
                             If any of the black cards the CPU has are Draw 4s, and the next player is running low on cards, the CPU will use one. 
@@ -660,7 +671,7 @@
                     else {
                         // If there are no playable cards AND the draw pile is empty, their turn is considered void.
 
-                        Console.WriteLine($"\n>> {GetPlayer().name} can't play at all this turn.");
+                        Console.WriteLine($"\n>> {GetPlayer().name} can't play at all this turn. Reshuffling...");
                         voidTurn = true;
                         break;
                     }
@@ -670,7 +681,7 @@
                 if(added > 0) Console.WriteLine($"\n>> {GetPlayer().name} pulled {added} more card{(added == 1 ? "." : "s.")}");
 
                 if(playCard) await PlayCard(GetDeck()[cardIndex]);
-                else UpdatePlayerIndex();
+                else UpdatePlayerIndex(); 
                 
                 await Task.Delay(4000);
             }
@@ -707,13 +718,13 @@
                     switch(choose) {
                         case "Y":
                             answer = "!";
-                            playerIndex = 0;
+                            playerIndex = 1;
                         break;
 
                         case "N":
                             Random rnd = new();
                             answer = "!";
-                            playerIndex = rnd.Next(1, allPlayers.Count);
+                            playerIndex = rnd.Next(0, allPlayers.Count);
                             break;
 
                         default:
@@ -764,6 +775,7 @@
                     if(voidTurn) { 
                         voidTurn = false;
                         stalled++;
+                        await Task.Run(EmptyDiscardPile);
                     }   
                     else 
                         if(stalled > 0) stalled = 0;
@@ -774,9 +786,7 @@
                         Console.WriteLine($"\nNo one's playing! Reshuffling...");
                         Console.ResetColor();
 
-                        while(discardPile.Count > 0) builder.Add(discardPile.Pop());
-
-                        await Task.Run(RebuildDrawPile);
+                        await Task.Run(EmptyDiscardPile);
 
                         stalled = 0;
                         voidTurn = false;
