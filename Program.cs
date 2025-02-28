@@ -71,8 +71,6 @@
 
         #region All Methods
 
-            // =============================================================================
-            
             #region Game Creation 
 
             /// <summary>
@@ -259,6 +257,16 @@
             // =============================================================================
 
             #region Gameplay Flow 
+            
+            /// <summary>
+            /// Add a new card from the draw pile to the current player's hand.
+            /// </summary>
+            static void AddCard() {
+                if(drawPile.Count > 0) 
+                    GetDeck().Add(drawPile.Pop());
+                else 
+                    Console.WriteLine("\n>> There are no more cards that can be pulled...");
+            }
 
             /// <summary>
             /// Reshuffles the cards from the discard pile and adds them back into the draw pile.
@@ -268,16 +276,6 @@
                 while(discardPile.Count > 0) builder.Add(discardPile.Pop());
 
                 await Task.Run(RebuildDrawPile);
-            }
-
-            /// <summary>
-            /// Add a new card from the draw pile to the current player's hand.
-            /// </summary>
-            static void AddCard() {
-                if(drawPile.Count > 0) 
-                    GetDeck().Add(drawPile.Pop());
-                else 
-                    Console.WriteLine("\n>> There are no more cards that can be pulled...");
             }
 
              /// <summary>
@@ -487,7 +485,7 @@
                             string input = Console.ReadLine()?.ToUpper();
                    
                             switch(input) {
-                                case "ADD":
+                                case "A":
                                 
                                     while(drawPile.Count > 0) {
                                         AddCard();
@@ -547,7 +545,7 @@
                                             playCard = true;
                                         }
                                     }
-                                    else Console.WriteLine("Invalid input. Try typing 'ADD' for a new card, or the number in parentheses next to a card's name you want to play. ");
+                                    else Console.WriteLine("Invalid input. Try typing 'A' for a new card, or the number in parentheses next to a card's name you want to play. ");
                                     
                                 break;
                             }
@@ -626,9 +624,7 @@
                 await Task.Delay(2000);
             }
 
-        #endregion
-
-        // =============================================================================
+            #endregion
 
         #endregion
 
