@@ -241,7 +241,7 @@
             
             /// <summary>
             /// Sets the global variables back to their default values.
-            /// Clears every existing player and every existing card in the game from the draw pile.
+            /// Clears every existing player and every existing card in the game from the draw and discard piles.
             /// This is all done before the start of a brand new game.
             /// </summary>
             static void ResetGame() {
@@ -271,7 +271,7 @@
             }
 
             /// <summary>
-            /// Add a new card from the shared deck to the current player's hand.
+            /// Add a new card from the draw pile to the current player's hand.
             /// </summary>
             static void AddCard() {
                 if(drawPile.Count > 0) 
@@ -288,7 +288,7 @@
             static bool EvaluateCard(Card toPlay) => toPlay.suit.Equals(currentColor) || toPlay.number == currentNumber;
 
             /// <summary>
-            /// Called at the start of every turn. If you or a CPU can't play, the draw pile gets rebuilt.
+            /// Called at the start of every turn. If you or a CPU can't play, the draw pile gets rebuilt so new cards can be pulled and the game continues.
             /// </summary>
             /// <returns></returns>
             async static Task EvaluateTurn() {
@@ -425,7 +425,7 @@
             }
             
             /// <summary>
-            /// The global player index is incremented or decremented based on the players' order.
+            /// The player index variable is incremented or decremented based on the players' order.
             /// </summary>  
             static void UpdatePlayerIndex() {
                 playerIndex = NextPlayerIndex();
@@ -468,7 +468,7 @@
             // ===============================================================================
 
             /// <summary>
-            /// The logic for your and the CPU's turns. This task will keep running until someone wins the round.
+            /// The logic for your and the CPU's turns. This task will run repeatedly in Main() until someone wins the round.
             /// </summary>
             /// <returns></returns>
             async static Task TakeTurn() {
@@ -488,14 +488,6 @@
                    
                             switch(input) {
                                 case "ADD":
-                                    AddCard();
-                                    Console.WriteLine($"\n>> You drew a card.");
-                                    
-                                    await Task.Delay(1500);
-
-                                break;
-
-                                case "Q ADD":
                                 
                                     while(drawPile.Count > 0) {
                                         AddCard();
@@ -600,16 +592,17 @@
                                 else currentColor = RecommendColor();
 
                                 /* 
+                                    It's time to choose a specific wildcard.
                                     If any of the black cards the CPU has are Draw 4s, and the next player is running low on cards, the CPU will use one. 
-                                    It will use any random Draw 4 if there are no wild cards to choose from instead.
-                                */
+                                    It will still use a Draw 4 anyway if there are no wild cards to choose from instead.
+                                */                       
 
                                 if(eval.Any(f => f.effect == Kind.Draw_4) && allPlayers.ElementAt(NextPlayerIndex()).Value.Count <= 5) 
                                     cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Draw_4));
                                 else if(eval.Any(w => w.effect == Kind.Wild)) 
                                     cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Wild));
                                 else 
-                                    cardIndex = GetDeck().IndexOf(eval.ElementAt(rnd.Next(eval.Count())));
+                                    cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Draw_4));
 
                                 playCard = true;
                             }
@@ -618,8 +611,7 @@
 
                                 AddCard();
                                 added++;
-                            }
-                            
+                            }           
                         break;
                     }
 
