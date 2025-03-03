@@ -463,6 +463,32 @@
                 Console.Write($"\n{ (highlight ? "" : "What will you do? ") }");
             }
 
+            static bool YesNo(string question) {
+                bool answer = false;
+                string wl = string.Empty;
+
+                while(wl == string.Empty) {
+                    Console.WriteLine(question);
+
+                    string choice = Console.ReadLine()?.ToUpper();
+
+                    switch(choice) {
+                        case "Y":
+                            answer = true;
+                            wl = "!";
+                            break;
+                        case "N":
+                            wl = "!";
+                            break;
+                        default:
+                            Console.WriteLine("Just answer the question.");
+                            break;
+                    }
+                }
+
+                return answer;
+            }
+
             // ===============================================================================
 
             /// <summary>
@@ -643,34 +669,9 @@
                 await Task.Run(CreatePlayers);
 
                 // Decide whose going first: you or a CPU.
-
-                string answer = string.Empty;
         
-                do {
-                    Console.WriteLine("\nAre you dealing? (Y/N)");
-
-                    string choose = Console.ReadLine()?.ToUpper();
-
-                    switch(choose) {
-                        case "Y":
-                            answer = "!";
-                            playerIndex = 1;
-                        break;
-
-                        case "N":
-                            Random rnd = new();
-                            answer = "!";
-                            playerIndex = rnd.Next(0, allPlayers.Count);
-                            break;
-
-                        default:
-                            Console.WriteLine("Just answer the question. (Y/N)");
-                            break;
-                    }
-
-                } while(answer == string.Empty);
-
-                answer = string.Empty;
+                Random rnd = new();
+                playerIndex = YesNo("\nAre you dealing? (Y/N)") ? 1 : playerIndex = rnd.Next(0, allPlayers.Count);;
 
                 #endregion
 
@@ -714,27 +715,11 @@
 
                 // Give the player the option to play again if they want. 
 
-                do {
-                    Console.WriteLine("\nDo you want to play again? (Y/N)");
-
-                    string r_answer = Console.ReadLine()?.ToUpper();
-
-                    switch(r_answer) {
-                        case "Y":
-                            Console.WriteLine("Starting another round.");
-                            ResetGame();
-                            answer = "!";
-                            break;
-                        case "N":
-                            noMore = true;
-                            answer = "!";
-                            break;
-                        default:
-                            Console.WriteLine("Answer the question. (Y/N)");
-                            break;
-                    }
-
-                } while (answer == string.Empty);
+                if(YesNo("\nDo you want to play again? (Y/N)")) {
+                    Console.WriteLine("Starting another round.");
+                    ResetGame();
+                }
+                else noMore = true;
 
                 #endregion
 
