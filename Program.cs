@@ -5,6 +5,13 @@
         - There's new cards that let you swap decks with other players holy wow
         Gotta give you the choice to include Swap and Shuffle Hands next
         - I went my whole life not knowing uno had a score system lol
+        The scoring for the cards is as follows:
+
+        Numbered cards (0-9) – Face value
+        Draw Two/Skip/Reverse – 20 points each
+        Wild/Wild Draw Four – 50 points each
+        Wild Swap Hands/Wild Customizable cards – 40 points each
+
     */
 
      sealed class UNO_Game {
@@ -18,10 +25,12 @@
          /// <summary>
         /// All cards are objects with an assigned number, color, and effect.
         /// </summary>
-        struct Card(Suit suit, Kind effect, int number) {
+        struct Card(Suit suit, Kind effect, int number, int points) {
             public int number = number;
             public Suit suit = suit;
             public Kind effect = effect;
+
+            public int points = points;
         }
 
         /// <summary>
@@ -29,9 +38,11 @@
         /// </summary>
         /// <param name="name">The name of whoever's playing.</param>
         /// <param name="tp">The marker for whether a player is you or a CPU.</param>
-        struct Player(string name, Player.Type tp) {
-            public string name = name;
-            public Type type = tp;
+        sealed class Player(string name, Player.Type tp) {
+            public string name {get; private set;} = name;
+            public Type type {get; private set;} = tp;
+
+            public int score = 0;
 
             public enum Type { YOU, CPU }
         } 
@@ -45,7 +56,8 @@
         // Keeps track of whose turn it is
         static int playerIndex; 
         static bool reverseOrder = false;
-
+        static bool newCards = false;
+        static bool keepScore = false;
 
         // The color and number of the last played card.
         static Suit currentColor = Suit.Unassigned;
@@ -84,21 +96,21 @@
                     if (suit == Suit.Black) break; // We only need this loop for the first four colors.
 
                     // Create a wild card and a draw 4 card. Since this foreach loop runs four times, there will be four in total for both kinds.
-                    builder.Add(new Card(Suit.Black, Kind.Wild, -5));
-                    builder.Add(new Card(Suit.Black, Kind.Draw_4, -4));
+                    builder.Add(new Card(Suit.Black, Kind.Wild, -5, 50));
+                    builder.Add(new Card(Suit.Black, Kind.Draw_4, -4, 50));
 
-                    // A for loop that runs twice. Out of it, we get two skips, reverses, and draw 2s, AND two sets of numbered cards 1 thorugh 10.
+                    // A for loop that runs twice. Out of it, we get two skips, reverses, and draw 2s, AND two sets of numbered cards 1 through 9.
                     for(int d = 0; d < 2; d++) {
-                        builder.Add(new Card(suit, Kind.Skip, -3));
-                        builder.Add(new Card(suit, Kind.Reverse, -2));
-                        builder.Add(new Card(suit, Kind.Draw_2, -1));
+                        builder.Add(new Card(suit, Kind.Skip, -3, 20));
+                        builder.Add(new Card(suit, Kind.Reverse, -2, 20));
+                        builder.Add(new Card(suit, Kind.Draw_2, -1, 20));
 
-                        // For loop for numbered cards, 1 through 10.
-                        for(int n = 1; n < 10; n++) builder.Add(new Card(suit, Kind.Numbered, n));
+                        // For loop for numbered cards, 1 through 9.
+                        for(int n = 1; n < 10; n++) builder.Add(new Card(suit, Kind.Numbered, n, n));
                     }
 
                     // Finally, every RGBY suit has one 0 card.
-                    builder.Add(new Card(suit, Kind.Numbered, 0));
+                    builder.Add(new Card(suit, Kind.Numbered, 0, 0));
                 }
 
                 await Task.Run(RebuildDrawPile);
@@ -334,14 +346,8 @@
             /// </summary>
             /// <param name="playThis">The card to be played from the current player's deck</param>
             async static Task PlayCard(Card playThis) {
-                // Start building the message to end off the current turn.
 
-                if(GetDeck().Count == 2) Console.WriteLine($"\n>> {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "have" : "has")} UNO!");
-
-                Console.Write($"\n>> {GetPlayer().name} ({GetDeck().Count - 1}): ");
-
-
-                // Change the current color and number to the card that was played then moved on to the next player.
+                // Change the current color and number to the card that was played, then award the current player their points before moving on to the next one.
 
                 listIndex = playerIndex;
                 removeIndex = GetDeck().IndexOf(playThis);
@@ -352,8 +358,17 @@
 
                 if(playThis.effect == Kind.Reverse) reverseOrder = !reverseOrder;
 
-                UpdatePlayerIndex();
+                if(keepScore) GetPlayer().score += GetDeck()[removeIndex].points;
 
+
+                // Start building the message to end off the current turn.
+
+                if(GetDeck().Count == 2) Console.WriteLine($"\n>> {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "have" : "has")} UNO!");
+
+                Console.Write($"\n>> {GetPlayer().name} ({GetDeck().Count - 1})" + $"({(keepScore ? GetPlayer().score : string.Empty)})" + ": ");
+
+
+                UpdatePlayerIndex();
 
                 // Perform the last card's effect on this player.
 
@@ -671,7 +686,9 @@
                 // Decide whose going first: you or a CPU.
         
                 Random rnd = new();
-                playerIndex = YesNo("\nAre you dealing? (Y/N)") ? 1 : playerIndex = rnd.Next(0, allPlayers.Count);;
+                playerIndex = YesNo("\nAre you dealing? (Y/N)") ? 1 : playerIndex = rnd.Next(0, allPlayers.Count);
+                newCards = YesNo("\nInclude the Swap and Shuffle Hands cards? (Y/N)");
+                keepScore = YesNo("\nUse the score system? (Y/N)");
 
                 #endregion
 
@@ -701,9 +718,9 @@
 
                 // The game runs as long as every player still has cards.
 
-                while(!allPlayers.Any(pl => pl.Value.Count == 0)) await Task.Run(TakeTurn);
+                while(!allPlayers.Any(pl => pl.Value.Count == 0) && !allPlayers.Any(pl => pl.Key.score >= 500)) await Task.Run(TakeTurn);
 
-                var winner = allPlayers.First(pl => pl.Value.Count == 0);
+                var winner = allPlayers.First(pl => pl.Value.Count == 0 || pl.Key.score >= 500);
                 
                 Console.WriteLine($"\n ~~~ GAME OVER! {winner.Key.name} won. ~~~ ");
 
