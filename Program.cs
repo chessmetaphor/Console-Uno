@@ -1,21 +1,19 @@
-﻿using System.Dynamic;
-
-namespace Uno_Game {
+﻿namespace Uno_Game {
 
     /*
-        There's some rules left to incorporate!
-        - There's new cards that let you swap decks with other players holy wow
-        Gotta give you the choice to include Swap and Shuffle Hands next
-        - I went my whole life not knowing uno had a score system lol
-        The scoring for the cards is as follows:
+        Okay so each new UNO deck has three custom cards or EITHER a swap or shuffle card
+        Dunno how i'm gonna do custom cards but I guess you'll randomly get one of these each round
 
-        Numbered cards (0-9) – Face value
-        Draw Two/Skip/Reverse – 20 points each
-        Wild/Wild Draw Four – 50 points each
-        Wild Swap Hands/Wild Customizable cards – 40 points each
+        DONE
+        - Swap and Shuffle Kinds added
+        - CreateCards(bool newCards) adds either a swap OR shuffle card to the deck
 
-        Actually you don't accumulate points DURING the game whoops
-        You get an UNO first and THEN all the points go to you omg
+        TASKS
+        - What happens when you play the card
+        - The task to give you the player you want to choose to swap with
+        - The AI for the CPUs that makes them choose the player with the least amount of cards to swap with
+        - The logic for swapping everyone's decks
+        - You should still be able to pick a new color upon playing the new cards
     */
 
      sealed class UNO_Game {
@@ -24,7 +22,7 @@ namespace Uno_Game {
 
         public enum Suit { Red, Blue, Green, Yellow, Black, Unassigned }
 
-        public enum Kind { Numbered, Skip, Reverse, Draw_2, Wild, Draw_4 }
+        public enum Kind { Numbered, Skip, Reverse, Draw_2, Wild, Draw_4, Swap, Shuffle }
 
          /// <summary>
         /// All cards are objects with an assigned number, color, and effect.
@@ -60,13 +58,13 @@ namespace Uno_Game {
         // Keeps track of whose turn it is
         static int playerIndex; 
         static bool reverseOrder = false;
-        //static bool newCards = false;
         static bool keepScore = false;
+
 
         // The color and number of the last played card.
         static Suit currentColor = Suit.Unassigned;
         static int currentNumber = -9;
-        static bool highlight = false; // Marks cards that you can play green when you pick a wrong one.
+        static bool highlight = false;
 
 
         // Where to remove the last played card.
@@ -93,7 +91,7 @@ namespace Uno_Game {
             /// Fills out each player's deck at the start of the game.
             /// </summary>
             /// <returns></returns> 
-            async static Task CreateCards() {
+            async static Task CreateCards(bool newCards) {
                 builder.Clear();
 
                 foreach(Suit suit in Enum.GetValues(typeof(Suit))) {
@@ -115,6 +113,11 @@ namespace Uno_Game {
 
                     // Finally, every RGBY suit has one 0 card.
                     builder.Add(new Card(suit, Kind.Numbered, 0, 0));
+                }
+
+                if(newCards) {
+                    Random r = new();
+                    builder.Add(new Card(Suit.Black, r.Next(2) == 0 ? Kind.Swap : Kind.Shuffle, -6, 40));
                 }
 
                 await Task.Run(RebuildDrawPile);
@@ -158,8 +161,6 @@ namespace Uno_Game {
                 await Task.Delay(3000);
             }
 
-            // When a player gets an UNO and the points need to be tallied, 
-            // call this again after adding up the points from the cards, putting them and all the draw pile cards in the builder list, then RebuildDrawPile()
             async static Task DealCards() {
                 // Give the players their cards.
                 foreach(List<Card> decks in allPlayers.Values)
@@ -396,7 +397,7 @@ namespace Uno_Game {
                         Kind.Draw_4 => $"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards!",
                         Kind.Wild => $"A wildcard was played!",
                         _=> $"A {Enum.GetName(currentColor)} {currentNumber} was played."}
-                        } {(GetDeck(prevPlayerIndex).Count != 0 ? playThis.effect switch {
+                        } {(GetDeck(prevPlayerIndex).Count != 1 ? playThis.effect switch {
                             Kind.Skip => $"{(GetPlayer().type == Player.Type.YOU ? "Your" : GetPlayer().name + "'s")} turn was skipped.",
                             Kind.Reverse => $"It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn.",
                             Kind.Draw_2 => $"{(GetPlayer().type == Player.Type.YOU ? "You were" : GetPlayer().name + " was")} forced to draw two cards!",
@@ -432,7 +433,6 @@ namespace Uno_Game {
                 discardPile.Push(GetDeck(prevPlayerIndex)[removeIndex]);
 
                 GetDeck(prevPlayerIndex).RemoveAt(removeIndex);
-
 
                 await Task.Delay(50);
             }
@@ -704,11 +704,11 @@ namespace Uno_Game {
 
                 await Task.Run(CreatePlayers);
 
-                // Decide whose going first: you or a CPU.
+                // Create rules for the game.
         
                 Random rnd = new();
                 playerIndex = YesNo("\nAre you dealing? (Y/N)") ? 1 : playerIndex = rnd.Next(0, allPlayers.Count);
-                //newCards = YesNo("\nInclude the Swap and Shuffle Hands cards? (Y/N)");
+                bool newCards = YesNo("\nInclude the Swap and Shuffle Hands cards? (Y/N)");
                 keepScore = YesNo("\nUse the score system? (Y/N)");
 
                 #endregion
@@ -717,15 +717,14 @@ namespace Uno_Game {
 
                 // The players' hands are filled with 7 cards at the start of the game.
 
+                await CreateCards(newCards);
+
                 Console.WriteLine("Distributing cards. Please wait...");
 
-                await Task.Run(CreateCards);
-
                 await Task.Run(DealCards);
-
-                // Start the discard pile with the card at the top of the draw pile.
                
                 await Task.Run(RebuildDiscardPile);
+
 
                 Console.WriteLine("Let's start the game...");
 
