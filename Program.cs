@@ -7,13 +7,16 @@
         DONE
         - Swap and Shuffle Kinds added
         - CreateCards(bool newCards) adds either a swap OR shuffle card to the deck
+        - The logic for swapping everyone's decks
+        - What happens when you play the card
 
         TASKS
-        - What happens when you play the card
         - The task to give you the player you want to choose to swap with
         - The AI for the CPUs that makes them choose the player with the least amount of cards to swap with
-        - The logic for swapping everyone's decks
         - You should still be able to pick a new color upon playing the new cards
+        - What happens when a swap or shuffle card is drawn for the discard pile first
+
+        also i need to remind myself to do Random.Shared whenever I need a random value lol
     */
 
      sealed class UNO_Game {
@@ -76,6 +79,7 @@
         static readonly Stack<Card> drawPile = []; // where every player pulls new cards from
         static readonly Stack<Card> discardPile = []; // where all cards that were played go
         private static List<Card> builder = []; // temporary list for cards that are being reshuffled
+        private static int[] swapIndex = new int[2]; // The indexes of two players that are swapping decks, 0th place is the one who played the card, 1st place is the victim
 
         static readonly Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
@@ -261,7 +265,6 @@
 
                 await Task.Delay(900);
             }
-
             
             /// <summary>
             /// Sets the global variables back to their default values.
@@ -386,9 +389,9 @@
                 Console.Write($"\n>> {GetPlayer().name} ({GetDeck().Count - 1})" + $"{(keepScore && GetPlayer().score > 0 ? $"({GetPlayer().score})" : string.Empty)}" + ": ");
 
                 
-                // Perform the last card's effect on the next player.
-                
-                UpdatePlayerIndex();
+                // Perform the last card's effect on the next player if the current player isn't playing their last card.
+
+                bool roundFinished = GetDeck(playerIndex).Count == 1;
                 
                 Console.WriteLine($"{ playThis.effect switch {
                         Kind.Skip => $"A {Enum.GetName(currentColor)} skip card!",
@@ -396,8 +399,10 @@
                         Kind.Draw_2 => $"{currentColor} Draw 2!",
                         Kind.Draw_4 => $"{GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards!",
                         Kind.Wild => $"A wildcard was played!",
+                        Kind.Swap => $"It's a Swap card!",
+                        Kind.Shuffle => $"{(GetPlayer().type == Player.Type.YOU ? "You" : GetPlayer().name)} played a Shuffle card!",
                         _=> $"A {Enum.GetName(currentColor)} {currentNumber} was played."}
-                        } {(GetDeck(prevPlayerIndex).Count != 1 ? playThis.effect switch {
+                        } { (!roundFinished ? playThis.effect switch {
                             Kind.Skip => $"{(GetPlayer().type == Player.Type.YOU ? "Your" : GetPlayer().name + "'s")} turn was skipped.",
                             Kind.Reverse => $"It's {(GetPlayer().type == Player.Type.YOU ? "your" : GetPlayer().name + "'s")} turn.",
                             Kind.Draw_2 => $"{(GetPlayer().type == Player.Type.YOU ? "You were" : GetPlayer().name + " was")} forced to draw two cards!",
@@ -405,34 +410,55 @@
                             _=> $"The new color is {Enum.GetName(currentColor)}.",
                         }  : string.Empty)}");
 
-                switch(playThis.effect) {
-                    case Kind.Skip:
-                        UpdatePlayerIndex();
-                    break;
+                if(!roundFinished) {
+                    UpdatePlayerIndex();
 
-                    case Kind.Reverse:
-                        if (allPlayers.Count == 2) UpdatePlayerIndex();
-                    break;
+                    switch(playThis.effect) {
+                        case Kind.Skip:
+                            UpdatePlayerIndex();
+                        break;
 
-                    case Kind.Draw_2:
-                        for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 2); d++) AddCard();
-                        
-                        UpdatePlayerIndex();
-                    break;
+                        case Kind.Reverse:
+                            if (allPlayers.Count == 2) UpdatePlayerIndex();
+                        break;
 
-                    case Kind.Draw_4:
-                        for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 4); d++) AddCard();
+                        case Kind.Draw_2:
+                            for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 2); d++) AddCard();
+                            
+                            UpdatePlayerIndex();
+                        break;
 
-                        UpdatePlayerIndex();
-                    break;
+                        case Kind.Draw_4:
+                            for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 4); d++) AddCard();
+
+                            UpdatePlayerIndex();
+                        break;
+                    }
                 }
-            
 
-                // Remove the last card from the previous player's deck and move it to the discard pile.
+
+                // Remove the last played card from the previous player's deck and move it to the discard pile.
 
                 discardPile.Push(GetDeck(prevPlayerIndex)[removeIndex]);
 
                 GetDeck(prevPlayerIndex).RemoveAt(removeIndex);
+
+
+                // Swap or Shuffle decks if either of the two cards were played.
+
+                if(!roundFinished && (playThis.effect == Kind.Swap || playThis.effect == Kind.Shuffle)) switch(playThis.effect) {
+                                        case Kind.Shuffle:
+                                            Console.WriteLine("\n>> Rearranging decks...");
+
+                                            await SwapDecks([ ..Enumerable.Range(0, allPlayers.Count) ]);
+                                        break;
+
+                                        case Kind.Swap:
+                                            Console.WriteLine($"\n>> {GetPlayer(swapIndex[0])} chose to swap decks with {GetPlayer(swapIndex[1])}.");
+
+                                            await SwapDecks([ swapIndex[0], swapIndex[1] ]);
+                                        break;
+                                    }
 
                 await Task.Delay(50);
             }
@@ -464,6 +490,26 @@
                 return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
             }
             
+            async static Task SwapDecks(int[] these) {
+                int[] newOrder = these.Length == 2 ? [..these.Reverse()] : [..these.OrderBy(x => Random.Shared.Next())];
+                                                        // Two cards implies a swap, more than two implies a shuffle
+                List<List<Card>> swapped = [];
+
+                for(int d = 0; d < newOrder.Length; d++) { 
+                    swapped.Add([]); 
+                    swapped[d].AddRange(GetDeck(newOrder[d]));
+                }
+
+                int ind = 0;
+                foreach(List<Card> deck in allPlayers.Values) {
+                    deck.Clear();
+                    deck.AddRange(swapped[ind]);
+                    ind++;
+                }
+
+                await Task.Delay(100);
+            }
+
             /// <summary>
             /// The player index variable is incremented or decremented based on the players' order.
             /// </summary>  
