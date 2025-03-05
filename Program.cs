@@ -13,13 +13,14 @@
 
         KNOWN ISSUES:
         - Sometimes when a Shuffle card is played, you can still end up with the same deck.
+        - When you play a Shuffle card, it reshuffles decks more than once.
     */
 
      sealed class UNO_Game {
 
         #region Cards & Players
 
-        public enum Suit { Red, Blue, Green, Yellow, Black, Unassigned }
+        public enum Suit { Red, Blue, Green, Yellow, Black}
 
         public enum Kind { Numbered, Skip, Reverse, Draw_2, Wild, Draw_4, Swap, Shuffle }
 
@@ -61,7 +62,7 @@
 
 
         // The color and number of the last played card.
-        static Suit currentColor = Suit.Unassigned;
+        static Suit currentColor;
         static int currentNumber = -9;
         static bool highlight = false;
 
@@ -75,7 +76,7 @@
         static readonly Stack<Card> drawPile = []; // where every player pulls new cards from
         static readonly Stack<Card> discardPile = []; // where all cards that were played go
         private static List<Card> builder = []; // temporary list for cards that are being reshuffled
-        private static int swapIndex; // The indexes of two players that are swapping decks, 0th place is the one who played the card, 1st place is the victim
+        private static int swapIndex; // The index of the player whose deck is being swapped
 
         static readonly Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
@@ -288,8 +289,6 @@
             /// </summary>
             static void ResetGame() {
                 reverseOrder = false;
-                currentColor = Suit.Unassigned;
-                currentNumber = -9;
                 highlight = false;
                 drawPile.Clear();
                 discardPile.Clear();
@@ -317,7 +316,7 @@
                     string c_input = Console.ReadLine();
 
                     if(Enum.TryParse(c_input, out Suit result)) {
-                        if(!result.Equals(Suit.Black) && !result.Equals(Suit.Unassigned)) {
+                        if(!result.Equals(Suit.Black)) {
                             currentColor = result;
                             break;
                         } else Console.WriteLine("That can't be used. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
@@ -559,7 +558,13 @@
             /// 
             /// </summary>
             /// <returns>The index of the player the CPU could swap decks with</returns>
-            static int RecommendSwap() => 0;//allPlayers.Aggregate((l, r) => l.Value.Count < r.Value.Count ? l : r).Key;
+            static int RecommendSwap() {
+                Dictionary<int, int> choices = [];
+
+                foreach(int possible in Enumerable.Range(0, allPlayers.Count).Except([playerIndex])) choices.Add(possible, allPlayers.ElementAt(possible).Value.Count);
+
+                return choices.OrderBy(x => x.Value).ToList().First().Key;
+            }
 
             async static Task ShuffleDecks() {
                 int[] newOrder = [..Enumerable.Range(0, allPlayers.Count).OrderBy(x => Random.Shared.Next())];
