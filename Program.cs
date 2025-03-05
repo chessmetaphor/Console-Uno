@@ -1,19 +1,18 @@
 ﻿namespace Uno_Game {
 
     /*
-        Okay so each new UNO deck has three custom cards or EITHER a swap or shuffle card
-        Dunno how i'm gonna do custom cards but I guess you'll randomly get one of these each round
+        TASKS
+        - If a Shuffle card is played with two players, SwapCards(prevPlayerIndex, playerIndex) needs to be called instead
 
         TEST TIME AAAAAAAAAA
         - When Swap is played at the start of the round
         - When Shuffle is played at the start of the round
+        - When YOU use Swap
 
         also i need to remind myself to do Random.Shared whenever I need a random value lol
 
         KNOWN ISSUES:
-        - The swap card gets used AFTER the swap???
-        Like the swap WORKS i guess but the CPUs still end up with one less card than what I gave them
-        Also you should be able to pick a color AFTER you get a new deck whoops lol
+        - Sometimes when a Shuffle card is played, you can still end up with the same deck.
     */
 
      sealed class UNO_Game {
@@ -170,17 +169,6 @@
                 await Task.Delay(250);
             }
 
-            /* Before the game can start, something needs to happen depending on the card's effect. 
-                    If a Draw 4 was discarded, place it back in the draw pile and reshuffle it. Do this until a draw 4 does NOT appear again.
-                    (DONE!)
-
-                    If it was a skip card, update the player index. (DONE!)
-                    If it was a reverse card, set reverseOrder to true. (DONE!)
-                    If its a Draw 2, Pop() two cards from the draw pile into the current player's deck then update the player index. (DONE!)
-                    If its a wildcard, the current color is set with RecommendColor(). (DONE!)
-
-                    You'll have to swap the decks and cards among specific players when you implement the new cards too. (IN PROGRESS)
-                */
             async static Task RebuildDiscardPile() {
                 // Take the card at the top of the draw pile and discard it.
                 discardPile.Push(drawPile.Pop());
@@ -236,12 +224,6 @@
                             break;
 
                             case Kind.Swap or Kind.Shuffle:
-                                if (playerIndex == 0) { 
-                                    Console.WriteLine("What color card should this game start with?");
-
-                                    await Task.Run(ChooseYourColor);
-                                }
-                                else currentColor = RecommendColor();
                                 
                                 if(firstCard.effect == Kind.Swap) {
                                    int picked;
@@ -262,7 +244,15 @@
                                     Console.WriteLine($"{ (GetPlayer().type == Player.Type.YOU ? "You" : GetPlayer().name) } swapped decks with { (GetPlayer(picked).type == Player.Type.YOU ? "you" : GetPlayer(picked).name) }.");
                                 }
                                 else await Task.Run(ShuffleDecks);
-                                
+
+                                if (playerIndex == 0) { 
+                                    Console.WriteLine("What color card should this game start with?");
+                                    ViewCards();
+
+                                    await Task.Run(ChooseYourColor);
+                                }
+                                else currentColor = RecommendColor();
+                                     
                             break;
                         }
 
@@ -378,7 +368,7 @@
             /// </summary>
             /// <returns></returns>
             async static Task EvaluateTurn() {
-                if(!GetDeck().Any(e => e.suit == Suit.Black || EvaluateCard(e)) && drawPile.Count == 0) {
+                if(drawPile.Count == 0) {
                     Console.WriteLine("\n>> The draw pile is empty. Reshuffling...");
                     await Task.Run(EmptyDiscardPile);
                 }
@@ -466,8 +456,8 @@
                             Kind.Skip => $"{(GetPlayer(ind).type == Player.Type.YOU ? "Your" : GetPlayer(ind).name + "'s")} turn was skipped.",
                             Kind.Reverse => $"It's {(GetPlayer(ind).type == Player.Type.YOU ? "your" : GetPlayer(ind).name + "'s")} turn.",
                             Kind.Draw_2 => $"{(GetPlayer(ind).type == Player.Type.YOU ? "You were" : GetPlayer(ind).name + " was")} forced to draw two cards!",
-                            Kind.Numbered => string.Empty,
-                            _=> $"The new color is {Enum.GetName(currentColor)}.",
+                            Kind.Wild or Kind.Draw_4 => $"The new color is {Enum.GetName(currentColor)}.",
+                            _=> string.Empty,
                         }  : string.Empty)}");
 
                 if(!roundFinished) {
@@ -506,19 +496,34 @@
 
                 // Swap or Shuffle decks if either of the two cards were played.
 
-                if(!roundFinished && (playThis.effect == Kind.Swap || playThis.effect == Kind.Shuffle)) switch(playThis.effect) {
-                                        case Kind.Shuffle:
-                                            Console.WriteLine("\n>> Rearranging decks...");
+                if(!roundFinished && (playThis.effect == Kind.Swap || playThis.effect == Kind.Shuffle)) { 
+                    switch(playThis.effect) {
+                        case Kind.Shuffle:
+                            Console.WriteLine("\n>> Rearranging decks...");
 
-                                            await Task.Run(ShuffleDecks);
-                                        break;
+                            await Task.Run(ShuffleDecks);
+                        break;
 
-                                        case Kind.Swap:
-                                            Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {GetPlayer(swapIndex).name}.");
+                        case Kind.Swap:
+                            Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {GetPlayer(swapIndex).name}.");
 
-                                            await SwapDecks(prevPlayerIndex, swapIndex);
-                                        break;
-                                    }
+                            await SwapDecks(prevPlayerIndex, swapIndex);
+                            break;
+                        }
+
+                    // Choose a color now.
+                    if(prevPlayerIndex == 0) {
+                        Console.WriteLine("\nYou've been given a new deck. Choose a new color... ");
+
+                        ViewCards();
+
+                        Console.WriteLine("\n(Red, Blue, Yellow or Green (case-sensitive).) ");
+
+                        await Task.Run(ChooseYourColor);
+                    } else currentColor = RecommendColor();
+
+                     Console.WriteLine($"The new color is {Enum.GetName(currentColor)}.");
+                }
 
                 await Task.Delay(50);
             }
@@ -621,9 +626,7 @@
                         Kind.Skip => $"{Enum.GetName(card.suit)} Skip",
                         Kind.Reverse => $"{Enum.GetName(card.suit)} Reverse",
                         Kind.Draw_2 => $"{Enum.GetName(card.suit)} Draw 2",
-                        Kind.Draw_4 => "Draw 4",
-                        Kind.Wild => "Wild",
-                        _ => ""
+                        _=> Enum.GetName(typeof(Kind), card.effect)?.Replace('_', ' ')
                     }} || ";
 
                     Console.Write(display);
@@ -632,8 +635,6 @@
 
                     ind++;
                 }
-
-                Console.Write($"\n{ (highlight ? "" : "What will you do? ") }");
             }
 
             /// <summary>
@@ -685,6 +686,8 @@
                     switch(playerIndex) {
                         case 0: // Your turn
                             ViewCards();
+
+                            Console.Write($"\n{ (highlight ? "" : "What will you do? ") }");
 
                             string input = Console.ReadLine()?.ToUpper();
                    
