@@ -3,24 +3,26 @@
     /*
         TASKS
         - If a Shuffle card is played with two players, SwapCards(prevPlayerIndex, playerIndex) needs to be called instead
+        - The CPUs should choose another black card if they are the player with the least amount of cards
 
         TEST TIME AAAAAAAAAA
         - When Swap is played at the start of the round
         - When Shuffle is played at the start of the round
-        - When YOU use Swap
+        - When YOU use Swap and shuffle
 
         also i need to remind myself to do Random.Shared whenever I need a random value lol
 
         KNOWN ISSUES:
         - Sometimes when a Shuffle card is played, you can still end up with the same deck.
-        - When you play a Shuffle card, it reshuffles decks more than once.
+        - When you play a Shuffle card, it either reshuffles decks more than once OR it shows the next player's deck idk
+        - When you Swap decks with someone, you get asked to pick a color before AND after you swap
     */
 
      sealed class UNO_Game {
 
         #region Cards & Players
 
-        public enum Suit { Red, Blue, Green, Yellow, Black}
+        public enum Suit { Red, Blue, Green, Yellow, Black }
 
         public enum Kind { Numbered, Skip, Reverse, Draw_2, Wild, Draw_4, Swap, Shuffle }
 
@@ -63,7 +65,7 @@
 
         // The color and number of the last played card.
         static Suit currentColor;
-        static int currentNumber = -9;
+        static int currentNumber;
         static bool highlight = false;
 
 
@@ -230,14 +232,18 @@
                                    int picked;
 
                                     if(playerIndex == 0) {
-                                        await Task.Run(SwapChoice);
+                                        if(allPlayers.Count > 2) {
+                                            await Task.Run(SwapChoice);
 
-                                        picked = swapIndex;
+                                            picked = swapIndex;
+                                        } else picked = 1;
                                     }
                                     else {
-                                        int[] choices = [.. Enumerable.Range(0, allPlayers.Count).Except([playerIndex])];
+                                        if(allPlayers.Count > 2) {
+                                            int[] choices = [.. Enumerable.Range(0, allPlayers.Count).Except([playerIndex])];
 
-                                        picked = choices[Random.Shared.Next(0, choices.Length)];
+                                            picked = choices[Random.Shared.Next(0, choices.Length)];
+                                        }  else picked = 0;
                                     }
 
                                     await SwapDecks(playerIndex, picked);
@@ -504,7 +510,7 @@
                         break;
 
                         case Kind.Swap:
-                            Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {GetPlayer(swapIndex).name}.");
+                            Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {(GetPlayer(swapIndex).type == Player.Type.YOU ? "you" : GetPlayer(swapIndex).name)}.");
 
                             await SwapDecks(prevPlayerIndex, swapIndex);
                             break;
@@ -620,7 +626,7 @@
                 bool hl;
                 int ind = 1;
                 
-                foreach(Card card in GetDeck()) {
+                foreach(Card card in GetDeck(0)) {
 
                     hl = highlight && ( card.suit == Suit.Black || EvaluateCard(card) );
 
@@ -734,15 +740,18 @@
                                         else {
                                             // If you are getting ready to play a wild card, and it's NOT your last card...
                                             if(GetDeck().Count > 1) {
-                                                Console.Write("You chose a wild card! What color card should the next player put down? ");
-
-                                                // The program will wait for you to input a RGBY color.
-
-                                                await Task.Run(ChooseYourColor);
-
                                                 // The program will let you choose who to swap decks with if you played a swap hands card.
 
                                                 if(GetDeck()[index].effect == Kind.Swap) await Task.Run(SwapChoice);
+                                                else { 
+                                                    // You probably played a Shuffle, Wild, or Draw 4, so you get to choose a color straight away.
+
+                                                    Console.Write("You chose a wild card! What color card should the next player put down? ");
+
+                                                    // The program will wait for you to input a RGBY color.
+
+                                                    await Task.Run(ChooseYourColor);
+                                                }
                                             }
                                             else currentColor = RandomColor();
                                             
@@ -774,15 +783,7 @@
                             
                                 // Gather all the black cards in the deck.
                                 var eval = GetDeck().Where(e => e.suit == Suit.Black);
-
-                                /* 
-                                    It's time to choose a new color.
-                                    If there are ONLY black cards in the CPU's hand, a random RGBY color is picked.
-                                    If their deck consists of black cards AND RGBY cards the CPU can't play, the color the CPU has the most of gets picked instead.
-                                */
-
-                                currentColor = GetDeck().Count - eval.Count() == 0 ? RandomColor() : RecommendColor();
-
+                               
                                 /* 
                                     It's time to choose a specific wildcard.
                                     If any of the black cards the CPU has are Draw 4s, and the next player is running low on cards, the CPU will use one. 
@@ -797,11 +798,23 @@
                                 else if(eval.Any(s => s.effect == Kind.Swap) && allPlayers.Any(d => d.Value.Count <= 5)) {
                                         swapIndex = RecommendSwap();
                                         cardIndex = GetDeck().IndexOf(GetDeck().First(w => w.effect == Kind.Swap));
-                                    }
+                                }
                                 else if(eval.Any(w => w.effect == Kind.Wild)) 
                                     cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Wild));
-                                else 
-                                    cardIndex = GetDeck().IndexOf(eval.First());
+                                else {
+                                    cardIndex = GetDeck().IndexOf(eval.First()); 
+                                    if(GetDeck()[cardIndex].effect == Kind.Swap) swapIndex = RecommendSwap();
+                                }
+
+                                /* 
+                                    It's time to choose a new color.
+                                    If the CPU chose to swap with someone, the color ISN'T chosen here at all, but in PlayCard().
+
+                                    Otherwise, if there are ONLY black cards in the CPU's hand, a random RGBY color is picked.
+                                    If their deck consists of black cards AND RGBY cards the CPU can't play, the color the CPU has the most of gets picked instead.
+                                */
+
+                                if(GetDeck()[cardIndex].effect != Kind.Swap) currentColor = GetDeck().Count - eval.Count() == 0 ? RandomColor() : RecommendColor();
 
                                 playCard = true;
                             }
