@@ -2,20 +2,14 @@
 
     /*
         TASKS
-        - If a Shuffle card is played with two players, SwapCards(prevPlayerIndex, playerIndex) needs to be called instead
         - The CPUs should choose another black card if they are the player with the least amount of cards
-
-        TEST TIME AAAAAAAAAA
-        - When Swap is played at the start of the round
-        - When Shuffle is played at the start of the round
-        - When YOU use Swap and shuffle
+        - SwapChoice() should probably return an int
 
         also i need to remind myself to do Random.Shared whenever I need a random value lol
 
         KNOWN ISSUES:
         - Sometimes when a Shuffle card is played, you can still end up with the same deck.
-        - When you play a Shuffle card, it either reshuffles decks more than once OR it shows the next player's deck idk
-        - When you Swap decks with someone, you get asked to pick a color before AND after you swap
+        - OH WOW I had no idea you can put numbers for the colors you want LMAO
     */
 
      sealed class UNO_Game {
@@ -248,13 +242,18 @@
 
                                     await SwapDecks(playerIndex, picked);
 
-                                    Console.WriteLine($"{ (GetPlayer().type == Player.Type.YOU ? "You" : GetPlayer().name) } swapped decks with { (GetPlayer(picked).type == Player.Type.YOU ? "you" : GetPlayer(picked).name) }.");
+                                    Console.WriteLine($"\n>> { (GetPlayer().type == Player.Type.YOU ? "You" : GetPlayer().name) } swapped decks with { (GetPlayer(picked).type == Player.Type.YOU ? "you" : GetPlayer(picked).name) }.");
                                 }
-                                else await Task.Run(ShuffleDecks);
+                                else { // If a Shuffle card was played 
+                                    if(allPlayers.Count > 2) await Task.Run(ShuffleDecks); 
+                                    else await SwapDecks(playerIndex, NextPlayerIndex());
+                                }
 
                                 if (playerIndex == 0) { 
-                                    Console.WriteLine("What color card should this game start with?");
+                                    Console.WriteLine("What color card should this game start with?\n");
                                     ViewCards();
+
+                                    Console.WriteLine("\n");
 
                                     await Task.Run(ChooseYourColor);
                                 }
@@ -266,7 +265,7 @@
                     UpdatePlayerIndex();
                 }
 
-                Console.WriteLine($"{ (firstCard.suit == Suit.Black ? $"The first color is {currentColor}." : string.Empty) }" );
+                Console.WriteLine($"{ (firstCard.suit == Suit.Black ? $"The first color is {currentColor}." : string.Empty) }\n" );
 
                 await Task.Delay(0);
             }
@@ -345,7 +344,7 @@
 
                         break;
 
-                    } else Console.WriteLine($"Psst! { (allPlayers.Count > 2 ? $"Choose a # between 2 through {allPlayers.Count}" : "Write 2") }!");
+                    } else Console.WriteLine($"Psst! Choose a # between 2 through {allPlayers.Count}!");
                 }
 
                 await Task.Delay(0);
@@ -506,7 +505,8 @@
                         case Kind.Shuffle:
                             Console.WriteLine("\n>> Rearranging decks...");
 
-                            await Task.Run(ShuffleDecks);
+                            if(allPlayers.Count > 2) await Task.Run(ShuffleDecks);
+                            else await SwapDecks(prevPlayerIndex, playerIndex);
                         break;
 
                         case Kind.Swap:
@@ -742,9 +742,12 @@
                                             if(GetDeck().Count > 1) {
                                                 // The program will let you choose who to swap decks with if you played a swap hands card.
 
-                                                if(GetDeck()[index].effect == Kind.Swap) await Task.Run(SwapChoice);
-                                                else { 
-                                                    // You probably played a Shuffle, Wild, or Draw 4, so you get to choose a color straight away.
+                                                if(GetDeck()[index].effect == Kind.Swap) { 
+                                                    if(allPlayers.Count > 2) await Task.Run(SwapChoice); 
+                                                    else swapIndex = 1;
+                                                }
+                                                else if(GetDeck()[index].effect == Kind.Wild || GetDeck()[index].effect == Kind.Draw_4) { 
+                                                    // You probably played a Wild or a Draw 4, so you get to choose a color straight away.
 
                                                     Console.Write("You chose a wild card! What color card should the next player put down? ");
 
@@ -752,6 +755,8 @@
 
                                                     await Task.Run(ChooseYourColor);
                                                 }
+
+                                                // You can choose a color AFTER swapping or shuffling decks.
                                             }
                                             else currentColor = RandomColor();
                                             
@@ -814,7 +819,7 @@
                                     If their deck consists of black cards AND RGBY cards the CPU can't play, the color the CPU has the most of gets picked instead.
                                 */
 
-                                if(GetDeck()[cardIndex].effect != Kind.Swap) currentColor = GetDeck().Count - eval.Count() == 0 ? RandomColor() : RecommendColor();
+                                if(GetDeck()[cardIndex].effect != Kind.Swap && GetDeck()[cardIndex].effect != Kind.Shuffle) currentColor = GetDeck().Count - eval.Count() == 0 ? RandomColor() : RecommendColor();
 
                                 playCard = true;
                             }
@@ -873,7 +878,7 @@
                 Console.WriteLine("Distributing cards. Please wait...");
 
                 await Task.Run(DealCards);
-               
+
                 await Task.Run(RebuildDiscardPile);
 
 
