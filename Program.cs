@@ -216,11 +216,7 @@
                                 for(int d = 0; d < 2; d++) AddCard();
                             break;
 
-                            case Kind.Wild:
-                                currentColor = RecommendColor();
-                            break;
-
-                            case Kind.Swap or Kind.Shuffle:
+                            case Kind.Wild or Kind.Swap or Kind.Shuffle:
                                 
                                 if(firstCard.effect == Kind.Swap) {
                                    int picked;
@@ -237,17 +233,17 @@
                                             int[] choices = [.. Enumerable.Range(0, allPlayers.Count).Except([playerIndex])];
 
                                             picked = choices[Random.Shared.Next(0, choices.Length)];
-                                        }  else picked = 0;
+                                        } else picked = 0;
                                     }
 
                                     await SwapDecks(playerIndex, picked);
 
                                     Console.WriteLine($"\n>> { (GetPlayer().type == Player.Type.YOU ? "You" : GetPlayer().name) } swapped decks with { (GetPlayer(picked).type == Player.Type.YOU ? "you" : GetPlayer(picked).name) }.");
                                 }
-                                else { // If a Shuffle card was played 
-                                    if(allPlayers.Count > 2) await Task.Run(ShuffleDecks); 
-                                    else await SwapDecks(playerIndex, NextPlayerIndex());
-                                }
+                                
+                                // Shuffle cards act like regular wild cards at the start of the game, so no ShuffleCards() here.
+
+                                // Whoever is going first gets to pick the color.
 
                                 if (playerIndex == 0) { 
                                     Console.WriteLine("What color card should this game start with?\n");
@@ -257,8 +253,7 @@
 
                                     await Task.Run(ChooseYourColor);
                                 }
-                                else currentColor = RecommendColor();
-                                     
+                                else currentColor = RecommendColor();               
                             break;
                         }
 
@@ -418,6 +413,22 @@
             }
 
             /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="afterYou"></param>
+            /// <param name="order">True: Clockwise False: Counter-clockwise/Reverse</param>
+            /// <returns>The player who is after the one whose index was provided as the first argument</returns>
+            static int NextPlayerIndex(int afterYou, bool order) {
+                int p = order ? afterYou + 1 : afterYou - 1; 
+
+                if(p >= allPlayers.Count) return 0;
+                else if(p < 0) return allPlayers.Count - 1; 
+
+                return p;
+            }
+
+
+            /// <summary>
             /// Perform a different action depending on the card that's being played. 
             /// </summary>
             /// <param name="playThis">The card to be played from the current player's deck</param>
@@ -572,21 +583,51 @@
                 return choices.OrderBy(x => x.Value).ToList().First().Key;
             }
 
-            async static Task ShuffleDecks() {
-                int[] newOrder = [..Enumerable.Range(0, allPlayers.Count).OrderBy(x => Random.Shared.Next())];
-                                                
-                List<List<Card>> swapped = [];
+            /* According to the Rules:
+                The person who plays this card gets to collect ALL the cards from EACH player’s hand. Give them a good shuffle, 
+                and deal the cards back evenly to all the players, starting with the player to the left of the person who played 
+                the Wild Shuffle Hands card. Proceed dealing all the cards one-by-one, in a clockwise direction until there are 
+                no more cards left in your hand. This means that some players may end up with either more or less cards than 
+                what they had before the Wild Shuffle Hands card was played. 
 
-                for(int d = 0; d < newOrder.Length; d++) { 
-                    swapped.Add([]); 
-                    swapped[d].AddRange(GetDeck(newOrder[d]));
+                Also, the person who played the Wild Shuffle Hands card gets to choose what color to resume play.
+             */
+            async static Task ShuffleDecks() {
+                // int[] newOrder = [..Enumerable.Range(0, allPlayers.Count).OrderBy(x => Random.Shared.Next())];
+                                                
+                // List<List<Card>> swapped = [];
+
+                // for(int d = 0; d < newOrder.Length; d++) { 
+                //     swapped.Add([]); 
+                //     swapped[d].AddRange(GetDeck(newOrder[d]));
+                // }
+
+                // int ind = 0;
+                // foreach(List<Card> deck in allPlayers.Values) {
+                //     deck.Clear();
+                //     deck.AddRange(swapped[ind]);
+                //     ind++;
+                // }
+
+                // Gather all the cards from every deck.
+                List<Card> swapping = [];
+
+                foreach(var deck in allPlayers.Values) {
+                    swapping.AddRange(deck);
+                    deck.Clear();
                 }
 
-                int ind = 0;
-                foreach(List<Card> deck in allPlayers.Values) {
-                    deck.Clear();
-                    deck.AddRange(swapped[ind]);
-                    ind++;
+                // Shuffle the cards.
+
+                List<Card> newOrder = [.. swapping.OrderBy(_=> Random.Shared.Next())];
+
+                // While the newOrder list still has cards, add one card one by one to each deck.
+
+                int ind = playerIndex;
+                while(newOrder.Count > 0) {
+                    GetDeck(ind).Add(newOrder[0]);
+                    newOrder.RemoveAt(0);
+                    ind = NextPlayerIndex(ind, true);
                 }
 
                 await Task.Delay(100);
