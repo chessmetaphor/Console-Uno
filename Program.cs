@@ -3,12 +3,11 @@
     /*
         TASKS
         - The CPUs should choose another black card if they are the player with the least amount of cards
-        - SwapChoice() should probably return an int
+        - You and the CPUs should pick a color in PlayCard() not in the TakeTurn() task. 
 
         also i need to remind myself to do Random.Shared whenever I need a random value lol
 
         KNOWN ISSUES:
-        - Sometimes when a Shuffle card is played, you can still end up with the same deck.
         - OH WOW I had no idea you can put numbers for the colors you want LMAO
     */
 
@@ -72,8 +71,7 @@
         static readonly Stack<Card> drawPile = []; // where every player pulls new cards from
         static readonly Stack<Card> discardPile = []; // where all cards that were played go
         private static List<Card> builder = []; // temporary list for cards that are being reshuffled
-        private static int swapIndex; // The index of the player whose deck is being swapped
-
+        
         static readonly Dictionary<Player, List<Card>> allPlayers = []; // every player and their cards
         
         #endregion
@@ -221,13 +219,7 @@
                                 if(firstCard.effect == Kind.Swap) {
                                    int picked;
 
-                                    if(playerIndex == 0) {
-                                        if(allPlayers.Count > 2) {
-                                            await Task.Run(SwapChoice);
-
-                                            picked = swapIndex;
-                                        } else picked = 1;
-                                    }
+                                    if(playerIndex == 0) picked = allPlayers.Count > 2 ? SwapChoice() : 1;         
                                     else {
                                         if(allPlayers.Count > 2) {
                                             int[] choices = [.. Enumerable.Range(0, allPlayers.Count).Except([playerIndex])];
@@ -326,23 +318,15 @@
                 await Task.Delay(0);
             }
 
-            async static Task SwapChoice() {
+            static int SwapChoice() {
                 Console.WriteLine("Whose deck do you want? ");
 
                 while(true) {
                     string s_input = Console.ReadLine();
 
-                    if(int.TryParse(s_input, out int op)) {
-                        int victim = Math.Clamp(op - 1, 1, allPlayers.Count - 1);
-
-                        swapIndex = victim;
-
-                        break;
-
-                    } else Console.WriteLine($"Psst! Choose a # between 2 through {allPlayers.Count}!");
+                    if(int.TryParse(s_input, out int op)) return Math.Clamp(op - 1, 1, allPlayers.Count - 1);
+                    else Console.WriteLine($"Psst! Choose a # between 2 through {allPlayers.Count}!");
                 }
-
-                await Task.Delay(0);
             }
 
             /// <summary>
@@ -441,7 +425,7 @@
 
                 currentNumber = playThis.number;
 
-                if(!playThis.suit.Equals(Suit.Black)) currentColor = playThis.suit;
+                if(!playThis.suit.Equals(Suit.Black)) currentColor = playThis.suit; // You/CPUs should pick a color here if its not a swap/shuffle card
 
                 if(playThis.effect == Kind.Reverse) reverseOrder = !reverseOrder;
 
@@ -516,14 +500,19 @@
                         case Kind.Shuffle:
                             Console.WriteLine("\n>> Rearranging decks...");
 
-                            if(allPlayers.Count > 2) await Task.Run(ShuffleDecks);
-                            else await SwapDecks(prevPlayerIndex, playerIndex);
+                            await Task.Run(ShuffleDecks);     
                         break;
 
                         case Kind.Swap:
-                            Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {(GetPlayer(swapIndex).type == Player.Type.YOU ? "you" : GetPlayer(swapIndex).name)}.");
+                            int swapIndex;
 
+                            if(allPlayers.Count > 2) swapIndex = GetPlayer(prevPlayerIndex).type == Player.Type.YOU ? SwapChoice() : RecommendSwap();
+                            else swapIndex = playerIndex;
+
+                            Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {(GetPlayer(swapIndex).type == Player.Type.YOU ? "you" : GetPlayer(swapIndex).name)}.");
+                            
                             await SwapDecks(prevPlayerIndex, swapIndex);
+
                             break;
                         }
 
@@ -583,32 +572,7 @@
                 return choices.OrderBy(x => x.Value).ToList().First().Key;
             }
 
-            /* According to the Rules:
-                The person who plays this card gets to collect ALL the cards from EACH player’s hand. Give them a good shuffle, 
-                and deal the cards back evenly to all the players, starting with the player to the left of the person who played 
-                the Wild Shuffle Hands card. Proceed dealing all the cards one-by-one, in a clockwise direction until there are 
-                no more cards left in your hand. This means that some players may end up with either more or less cards than 
-                what they had before the Wild Shuffle Hands card was played. 
-
-                Also, the person who played the Wild Shuffle Hands card gets to choose what color to resume play.
-             */
             async static Task ShuffleDecks() {
-                // int[] newOrder = [..Enumerable.Range(0, allPlayers.Count).OrderBy(x => Random.Shared.Next())];
-                                                
-                // List<List<Card>> swapped = [];
-
-                // for(int d = 0; d < newOrder.Length; d++) { 
-                //     swapped.Add([]); 
-                //     swapped[d].AddRange(GetDeck(newOrder[d]));
-                // }
-
-                // int ind = 0;
-                // foreach(List<Card> deck in allPlayers.Values) {
-                //     deck.Clear();
-                //     deck.AddRange(swapped[ind]);
-                //     ind++;
-                // }
-
                 // Gather all the cards from every deck.
                 List<Card> swapping = [];
 
@@ -781,14 +745,9 @@
                                         else {
                                             // If you are getting ready to play a wild card, and it's NOT your last card...
                                             if(GetDeck().Count > 1) {
-                                                // The program will let you choose who to swap decks with if you played a swap hands card.
+                                                if(GetDeck()[index].effect == Kind.Wild || GetDeck()[index].effect == Kind.Draw_4) { 
 
-                                                if(GetDeck()[index].effect == Kind.Swap) { 
-                                                    if(allPlayers.Count > 2) await Task.Run(SwapChoice); 
-                                                    else swapIndex = 1;
-                                                }
-                                                else if(GetDeck()[index].effect == Kind.Wild || GetDeck()[index].effect == Kind.Draw_4) { 
-                                                    // You probably played a Wild or a Draw 4, so you get to choose a color straight away.
+                                                    // If you played Wild or a Draw 4, you get to choose a color straight away. (Will be PlayCard() later)
 
                                                     Console.Write("You chose a wild card! What color card should the next player put down? ");
 
@@ -841,16 +800,11 @@
                                 // There has to be a better way to write this lmao
                                 if(eval.Any(f => f.effect == Kind.Draw_4) && allPlayers.ElementAt(NextPlayerIndex()).Value.Count <= 5) 
                                     cardIndex = GetDeck().IndexOf(GetDeck().First(w => w.effect == Kind.Draw_4));
-                                else if(eval.Any(s => s.effect == Kind.Swap) && allPlayers.Any(d => d.Value.Count <= 5)) {
-                                        swapIndex = RecommendSwap();
-                                        cardIndex = GetDeck().IndexOf(GetDeck().First(w => w.effect == Kind.Swap));
-                                }
+                                else if(eval.Any(s => s.effect == Kind.Swap) && allPlayers.Any(d => d.Value.Count <= 5)) 
+                                    cardIndex = GetDeck().IndexOf(GetDeck().First(w => w.effect == Kind.Swap));
                                 else if(eval.Any(w => w.effect == Kind.Wild)) 
                                     cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Wild));
-                                else {
-                                    cardIndex = GetDeck().IndexOf(eval.First()); 
-                                    if(GetDeck()[cardIndex].effect == Kind.Swap) swapIndex = RecommendSwap();
-                                }
+                                else cardIndex = GetDeck().IndexOf(eval.First()); 
 
                                 /* 
                                     It's time to choose a new color.
@@ -860,6 +814,7 @@
                                     If their deck consists of black cards AND RGBY cards the CPU can't play, the color the CPU has the most of gets picked instead.
                                 */
 
+                                // Choose a color in PlayCard() next
                                 if(GetDeck()[cardIndex].effect != Kind.Swap && GetDeck()[cardIndex].effect != Kind.Shuffle) currentColor = GetDeck().Count - eval.Count() == 0 ? RandomColor() : RecommendColor();
 
                                 playCard = true;
@@ -1010,5 +965,4 @@
             Console.WriteLine($"\n ~~~ Game complete! You won {wins} {(wins == 1? "time" : "times")}. ~~~");
         }
     } 
-
 }
