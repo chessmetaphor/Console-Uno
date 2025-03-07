@@ -3,8 +3,8 @@
     /*
         TASKS
         - The CPUs should choose another black card if they are the player with the least amount of cards
-        - You and the CPUs should pick a color in PlayCard() not in the TakeTurn() task. 
-
+        - CPUs should prioritize lower point value cards when playing with the score system
+       
         also i need to remind myself to do Random.Shared whenever I need a random value lol
 
         KNOWN ISSUES:
@@ -243,7 +243,7 @@
 
                                     Console.WriteLine("\n");
 
-                                    await Task.Run(ChooseYourColor);
+                                    currentColor = ChooseYourColor();
                                 }
                                 else currentColor = RecommendColor();               
                             break;
@@ -252,7 +252,7 @@
                     UpdatePlayerIndex();
                 }
 
-                Console.WriteLine($"{ (firstCard.suit == Suit.Black ? $"The first color is {currentColor}." : string.Empty) }\n" );
+                Console.Write($"{ (firstCard.suit == Suit.Black ? $"The first color is {currentColor}." : string.Empty) }\n" );
 
                 await Task.Delay(0);
             }
@@ -303,29 +303,14 @@
                     Console.WriteLine("\n>> There are no more cards that can be pulled...");
             }
 
-            async static Task ChooseYourColor() {
+            static Suit ChooseYourColor() {
                 while(true) {
                     string c_input = Console.ReadLine();
 
                     if(Enum.TryParse(c_input, out Suit result)) {
-                        if(!result.Equals(Suit.Black)) {
-                            currentColor = result;
-                            break;
-                        } else Console.WriteLine("That can't be used. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
+                        if(!result.Equals(Suit.Black)) return result;
+                        else Console.WriteLine("That can't be used. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
                     } else Console.WriteLine("Invalid input. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
-                }
-
-                await Task.Delay(0);
-            }
-
-            static int SwapChoice() {
-                Console.WriteLine("Whose deck do you want? ");
-
-                while(true) {
-                    string s_input = Console.ReadLine();
-
-                    if(int.TryParse(s_input, out int op)) return Math.Clamp(op - 1, 1, allPlayers.Count - 1);
-                    else Console.WriteLine($"Psst! Choose a # between 2 through {allPlayers.Count}!");
                 }
             }
 
@@ -425,7 +410,7 @@
 
                 currentNumber = playThis.number;
 
-                if(!playThis.suit.Equals(Suit.Black)) currentColor = playThis.suit; // You/CPUs should pick a color here if its not a swap/shuffle card
+                if(!playThis.suit.Equals(Suit.Black)) currentColor = playThis.suit;
 
                 if(playThis.effect == Kind.Reverse) reverseOrder = !reverseOrder;
 
@@ -446,16 +431,16 @@
                         Kind.Skip => $"A {Enum.GetName(currentColor)} skip card!",
                         Kind.Reverse => $"A {Enum.GetName(currentColor)} Reverse card!",
                         Kind.Draw_2 => $"{currentColor} Draw 2!",
-                        Kind.Draw_4 => $"{GetPlayer(ind).name} {(GetPlayer(ind).type == Player.Type.YOU ? "were" : "was")} forced to draw FOUR cards!",
-                        Kind.Wild => $"A wildcard was played!",
-                        Kind.Swap => $"It's a Swap card!",
+                        Kind.Draw_4 => "It's a Draw 4!",
+                        Kind.Wild => "It's a wildcard!",
+                        Kind.Swap => "It's a Swap card!",
                         Kind.Shuffle => $"{(GetPlayer().type == Player.Type.YOU ? "You" : GetPlayer().name)} played a Shuffle card!",
                         _=> $"A {Enum.GetName(currentColor)} {currentNumber} was played."}
                         } { (!roundFinished ? playThis.effect switch {
                             Kind.Skip => $"{(GetPlayer(ind).type == Player.Type.YOU ? "Your" : GetPlayer(ind).name + "'s")} turn was skipped.",
                             Kind.Reverse => $"It's {(GetPlayer(ind).type == Player.Type.YOU ? "your" : GetPlayer(ind).name + "'s")} turn.",
                             Kind.Draw_2 => $"{(GetPlayer(ind).type == Player.Type.YOU ? "You were" : GetPlayer(ind).name + " was")} forced to draw two cards!",
-                            Kind.Wild or Kind.Draw_4 => $"The new color is {Enum.GetName(currentColor)}.",
+                            Kind.Draw_4 => $"{GetPlayer(ind).name} {(GetPlayer(ind).type == Player.Type.YOU ? "were" : "was")} forced to draw four cards!",
                             _=> string.Empty,
                         }  : string.Empty)}");
 
@@ -477,10 +462,27 @@
                             UpdatePlayerIndex();
                         break;
 
-                        case Kind.Draw_4:
-                            for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 4); d++) AddCard();
+                        case Kind.Wild or Kind.Draw_4:
+                            if(playThis.effect == Kind.Draw_4) for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 4); d++) AddCard();
+                            
+                            // Decide a color here!
+                            switch(prevPlayerIndex) {
+                                case 0:
+                                    Console.Write("You chose a wild card! What color card should the next player put down? ");
 
-                            UpdatePlayerIndex();
+                                    // The program will wait for you to input a RGBY color.
+
+                                    currentColor = ChooseYourColor();
+                                break;
+
+                                default:
+                                    currentColor = (GetDeck(prevPlayerIndex).Count - GetDeck(prevPlayerIndex).Count(e => e.suit == Suit.Black) == 0 )? RandomColor() : RecommendColor(prevPlayerIndex);
+                                break;
+                            }
+
+                            Console.WriteLine($"The new color is {Enum.GetName(currentColor)}.");
+
+                            if(playThis.effect == Kind.Draw_4) UpdatePlayerIndex();
                         break;
                     }
                 }
@@ -504,10 +506,7 @@
                         break;
 
                         case Kind.Swap:
-                            int swapIndex;
-
-                            if(allPlayers.Count > 2) swapIndex = GetPlayer(prevPlayerIndex).type == Player.Type.YOU ? SwapChoice() : RecommendSwap();
-                            else swapIndex = playerIndex;
+                            int swapIndex = allPlayers.Count > 2 ? (GetPlayer(prevPlayerIndex).type == Player.Type.YOU ? SwapChoice() : RecommendSwap()) : playerIndex;
 
                             Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {(GetPlayer(swapIndex).type == Player.Type.YOU ? "you" : GetPlayer(swapIndex).name)}.");
                             
@@ -524,7 +523,7 @@
 
                         Console.WriteLine("\n(Red, Blue, Yellow or Green (case-sensitive).) ");
 
-                        await Task.Run(ChooseYourColor);
+                        currentColor = ChooseYourColor();
                     } else currentColor = RecommendColor();
 
                      Console.WriteLine($"The new color is {Enum.GetName(currentColor)}.");
@@ -556,6 +555,19 @@
                 };
 
                 foreach(Card card in GetDeck().Where(d => !d.suit.Equals(Suit.Black))) amounts[card.suit] += 1;
+                                
+                return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
+            }
+
+            static Suit RecommendColor(int toWho) {
+                Dictionary<Suit, int> amounts = new() {
+                    {Suit.Red, 0},
+                    {Suit.Blue, 0},
+                    {Suit.Green, 0},
+                    {Suit.Yellow, 0}
+                };
+
+                foreach(Card card in GetDeck(toWho).Where(d => !d.suit.Equals(Suit.Black))) amounts[card.suit] += 1;
                                 
                 return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
             }
@@ -595,6 +607,17 @@
                 }
 
                 await Task.Delay(100);
+            }
+
+            static int SwapChoice() {
+                Console.WriteLine("Whose deck do you want? ");
+
+                while(true) {
+                    string s_input = Console.ReadLine();
+
+                    if(int.TryParse(s_input, out int op)) return Math.Clamp(op - 1, 1, allPlayers.Count - 1);
+                    else Console.WriteLine($"Psst! Choose a # between 2 through {allPlayers.Count}!");
+                }
             }
 
             async static Task SwapDecks(int player, int victim) {
@@ -730,39 +753,17 @@
 
                                         int index = Math.Clamp(num - 1, 0, GetDeck().Count - 1);
 
-                                        if(GetDeck()[index].suit != Suit.Black) {
-                                            if(EvaluateCard(GetDeck()[index])) { 
-                                                cardIndex = index;
-                                                playCard = true;
-                                            }
-                                            else { 
-                                                Console.WriteLine("Can't play that one; doesn't match either the last card's color or number. "); 
-                                                await Task.Delay(1000);
-
-                                                if(!highlight) highlight = true;
-                                            }
-                                        }
-                                        else {
-                                            // If you are getting ready to play a wild card, and it's NOT your last card...
-                                            if(GetDeck().Count > 1) {
-                                                if(GetDeck()[index].effect == Kind.Wild || GetDeck()[index].effect == Kind.Draw_4) { 
-
-                                                    // If you played Wild or a Draw 4, you get to choose a color straight away. (Will be PlayCard() later)
-
-                                                    Console.Write("You chose a wild card! What color card should the next player put down? ");
-
-                                                    // The program will wait for you to input a RGBY color.
-
-                                                    await Task.Run(ChooseYourColor);
-                                                }
-
-                                                // You can choose a color AFTER swapping or shuffling decks.
-                                            }
-                                            else currentColor = RandomColor();
-                                            
+                                        if(EvaluateCard(GetDeck()[index]) || GetDeck()[index].suit == Suit.Black) { 
                                             cardIndex = index;
                                             playCard = true;
                                         }
+                                        else { 
+                                            Console.WriteLine("Can't play that one; doesn't match either the last card's color or number. "); 
+                                            await Task.Delay(1000);
+
+                                            if(!highlight) highlight = true;
+                                        }
+                                        
                                     }
                                     else Console.WriteLine("Invalid input. Try typing 'A' for a new card, or the number in parentheses next to a card's name you want to play. ");
                                     
@@ -778,9 +779,6 @@
                                 foreach(Card crd in GetDeck().Where(EvaluateCard)) eval.Add(GetDeck().IndexOf(crd));
                                 
                                 cardIndex = eval[rnd.Next(eval.Count)];
-
-                                // If a black card was picked, then the recommended color is chosen.
-                                if(GetDeck()[cardIndex].suit == Suit.Black) currentColor = RecommendColor();
 
                                 playCard = true;
                             }
@@ -805,17 +803,6 @@
                                 else if(eval.Any(w => w.effect == Kind.Wild)) 
                                     cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Wild));
                                 else cardIndex = GetDeck().IndexOf(eval.First()); 
-
-                                /* 
-                                    It's time to choose a new color.
-                                    If the CPU chose to swap with someone, the color ISN'T chosen here at all, but in PlayCard().
-
-                                    Otherwise, if there are ONLY black cards in the CPU's hand, a random RGBY color is picked.
-                                    If their deck consists of black cards AND RGBY cards the CPU can't play, the color the CPU has the most of gets picked instead.
-                                */
-
-                                // Choose a color in PlayCard() next
-                                if(GetDeck()[cardIndex].effect != Kind.Swap && GetDeck()[cardIndex].effect != Kind.Shuffle) currentColor = GetDeck().Count - eval.Count() == 0 ? RandomColor() : RecommendColor();
 
                                 playCard = true;
                             }
@@ -860,7 +847,7 @@
                 // Create rules for the game.
         
                 playerIndex = YesNo("\nGoing first? (Y/N)") ? 0 : Random.Shared.Next(1, allPlayers.Count);
-                bool newCards = YesNo("\nInclude the Swap and Shuffle Hands cards? (Y/N)");
+                bool newCards = YesNo("\nInclude the Swap/Shuffle Hands card? (Y/N)");
                 keepScore = YesNo("\nUse the score system? (Y/N)");
 
                 #endregion
