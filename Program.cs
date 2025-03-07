@@ -64,7 +64,7 @@
 
 
         // Where to remove the last played card.
-        static int removeIndex; // spot in the hand the card occupies 
+        //static int removeIndex; // spot in the hand the card occupies 
         
        
         // Keeps track of the status of the draw pile and all players.
@@ -406,7 +406,7 @@
                 // Change the current color and number to the card that was played, then award the current player their points before moving on to the next one.
 
                 int prevPlayerIndex = playerIndex;
-                removeIndex = GetDeck().IndexOf(playThis);
+                int removeIndex = GetDeck().IndexOf(playThis);
 
                 currentNumber = playThis.number;
 
@@ -506,7 +506,7 @@
                         break;
 
                         case Kind.Swap:
-                            int swapIndex = allPlayers.Count > 2 ? (GetPlayer(prevPlayerIndex).type == Player.Type.YOU ? SwapChoice() : RecommendSwap()) : playerIndex;
+                            int swapIndex = allPlayers.Count > 2 ? (GetPlayer(prevPlayerIndex).type == Player.Type.YOU ? SwapChoice() : RecommendSwap(prevPlayerIndex)) : playerIndex;
 
                             Console.WriteLine($"\n>> {GetPlayer(prevPlayerIndex).name} chose to swap decks with {(GetPlayer(swapIndex).type == Player.Type.YOU ? "you" : GetPlayer(swapIndex).name)}.");
                             
@@ -524,7 +524,7 @@
                         Console.WriteLine("\n(Red, Blue, Yellow or Green (case-sensitive).) ");
 
                         currentColor = ChooseYourColor();
-                    } else currentColor = RecommendColor();
+                    } else currentColor = RecommendColor(prevPlayerIndex);
 
                      Console.WriteLine($"The new color is {Enum.GetName(currentColor)}.");
                 }
@@ -573,13 +573,10 @@
             }
             
             /// <summary>
-            /// 
-            /// </summary>
-            /// <returns>The index of the player the CPU could swap decks with</returns>
-            static int RecommendSwap() {
+            static int RecommendSwap(int whomst) {
                 Dictionary<int, int> choices = [];
 
-                foreach(int possible in Enumerable.Range(0, allPlayers.Count).Except([playerIndex])) choices.Add(possible, allPlayers.ElementAt(possible).Value.Count);
+                foreach(int possible in Enumerable.Range(0, allPlayers.Count).Except([whomst])) choices.Add(possible, allPlayers.ElementAt(possible).Value.Count);
 
                 return choices.OrderBy(x => x.Value).ToList().First().Key;
             }
