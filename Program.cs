@@ -9,6 +9,7 @@
 
         KNOWN ISSUES:
         - OH WOW I had no idea you can put numbers for the colors you want LMAO
+        - The action and wild card messages don't know whose turn it is when you play with two players UGHHHHH
     */
 
      sealed class UNO_Game {
@@ -63,7 +64,6 @@
 
 
         // Where to remove the last played card.
-        static int prevPlayerIndex; // from whose hand
         static int removeIndex; // spot in the hand the card occupies 
         
        
@@ -405,7 +405,7 @@
 
                 // Change the current color and number to the card that was played, then award the current player their points before moving on to the next one.
 
-                prevPlayerIndex = playerIndex;
+                int prevPlayerIndex = playerIndex;
                 removeIndex = GetDeck().IndexOf(playThis);
 
                 currentNumber = playThis.number;
@@ -425,7 +425,7 @@
                 // Perform the last card's effect on the next player if the current player isn't playing their last card.
 
                 bool roundFinished = GetDeck(playerIndex).Count == 1;
-                int ind = NextPlayerIndex();
+                int ind =  allPlayers.Count == 2 ? (playerIndex == 0 ? 1 : 0) : NextPlayerIndex();
 
                 Console.WriteLine($"{ playThis.effect switch {
                         Kind.Skip => $"A {Enum.GetName(currentColor)} skip card!",
@@ -873,23 +873,24 @@
             
                 #region Play
                 
-                int roundWinner = 0;
+                int roundWinner;
 
                 // The game runs as long as every player still has cards.
                 while(true) { 
                     await Task.Run(TakeTurn); 
 
                     // A winner is found when the player who just took their turn has 0 cards left.
-                    if(GetDeck(prevPlayerIndex).Count == 0) {
-                        roundWinner = prevPlayerIndex;
-                  
+                    if(allPlayers.Values.Any(d => d.Count == 0)) { 
+
+                       roundWinner = allPlayers.ToList().FindIndex(e => e.Equals(allPlayers.First(w => w.Value.Count == 0)));
+
                         /* If we aren't using the score system the game ends immediately. 
                             Otherwise, we have to check first if the player made over 500 pts yet
                             from the total value of everyone's cards. If they did not, the draw pile
                             is reshuffled and new cards are distributed.
                         */
 
-                        if(keepScore) {
+                       if(keepScore) {
                             builder.Clear();
                             int pts = 0;
                             foreach(var pl in allPlayers) {
