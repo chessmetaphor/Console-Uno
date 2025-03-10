@@ -3,13 +3,12 @@
     /*
         TASKS
         - The CPUs should choose another black card if they are the player with the least amount of cards
-        - CPUs should prioritize lower point value cards when playing with the score system
-       
+
         also i need to remind myself to do Random.Shared whenever I need a random value lol
 
         KNOWN ISSUES:
-        - OH WOW I had no idea you can put numbers for the colors you want LMAO
-        - The action and wild card messages don't know whose turn it is when you play with two players UGHHHHH
+        - When you're playing a game with the score system, you don't get to pick a new color if you end the
+        game with a wildcard.
     */
 
      sealed class UNO_Game {
@@ -63,10 +62,6 @@
         static bool highlight = false;
 
 
-        // Where to remove the last played card.
-        //static int removeIndex; // spot in the hand the card occupies 
-        
-       
         // Keeps track of the status of the draw pile and all players.
         static readonly Stack<Card> drawPile = []; // where every player pulls new cards from
         static readonly Stack<Card> discardPile = []; // where all cards that were played go
@@ -245,7 +240,7 @@
 
                                     currentColor = ChooseYourColor();
                                 }
-                                else currentColor = RecommendColor();               
+                                else currentColor = RecommendColor(playerIndex);               
                             break;
                         }
 
@@ -307,7 +302,7 @@
                 while(true) {
                     string c_input = Console.ReadLine();
 
-                    if(Enum.TryParse(c_input, out Suit result)) {
+                    if(Enum.TryParse(c_input, out Suit result) && !int.TryParse(c_input, out _)) {
                         if(!result.Equals(Suit.Black)) return result;
                         else Console.WriteLine("That can't be used. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
                     } else Console.WriteLine("Invalid input. Choose Red, Blue, Yellow, or Green (Case-sensitive). ");
@@ -403,10 +398,7 @@
             /// <param name="playThis">The card to be played from the current player's deck</param>
             async static Task PlayCard(Card playThis) {
 
-                // Change the current color and number to the card that was played, then award the current player their points before moving on to the next one.
-
-                int prevPlayerIndex = playerIndex;
-                int removeIndex = GetDeck().IndexOf(playThis);
+                // Change the current color (if it's not a black card) and number to the card that was played.
 
                 currentNumber = playThis.number;
 
@@ -415,16 +407,14 @@
                 if(playThis.effect == Kind.Reverse) reverseOrder = !reverseOrder;
 
 
-                // Start building the message to end off the current turn.
+                // Describe what's happening this turn.
 
                 if(GetDeck().Count == 2) Console.WriteLine($"\n>> {GetPlayer().name} {(GetPlayer().type == Player.Type.YOU ? "have" : "has")} UNO!");
 
                 Console.Write($"\n>> {GetPlayer().name} ({GetDeck().Count - 1})" + $"{(keepScore && GetPlayer().score > 0 ? $"({GetPlayer().score})" : string.Empty)}" + ": ");
 
                 
-                // Perform the last card's effect on the next player if the current player isn't playing their last card.
-
-                bool roundFinished = GetDeck(playerIndex).Count == 1;
+                bool roundFinished = GetDeck(playerIndex).Count == 1; // True if this card is the current player's last one.
                 int ind =  allPlayers.Count == 2 ? (playerIndex == 0 ? 1 : 0) : NextPlayerIndex();
 
                 Console.WriteLine($"{ playThis.effect switch {
@@ -443,6 +433,12 @@
                             Kind.Draw_4 => $"{GetPlayer(ind).name} {(GetPlayer(ind).type == Player.Type.YOU ? "were" : "was")} forced to draw four cards!",
                             _=> string.Empty,
                         }  : string.Empty)}");
+
+
+                // Perform this card's effect on the next player if the current player isn't playing their very last card.
+
+                int prevPlayerIndex = playerIndex;
+                int removeIndex = GetDeck().IndexOf(playThis);
 
                 if(!roundFinished) {
                     UpdatePlayerIndex();
@@ -465,18 +461,17 @@
                         case Kind.Wild or Kind.Draw_4:
                             if(playThis.effect == Kind.Draw_4) for(int d = 0; d < Math.Clamp(drawPile.Count, 1, 4); d++) AddCard();
                             
-                            // Decide a color here!
+                            // You or the CPU that played this card can choose a color.
                             switch(prevPlayerIndex) {
                                 case 0:
-                                    Console.Write("You chose a wild card! What color card should the next player put down? ");
-
-                                    // The program will wait for you to input a RGBY color.
+                                    Console.Write("\nWhat color card should the next player put down? ");
 
                                     currentColor = ChooseYourColor();
                                 break;
 
                                 default:
-                                    currentColor = (GetDeck(prevPlayerIndex).Count - GetDeck(prevPlayerIndex).Count(e => e.suit == Suit.Black) == 0 )? RandomColor() : RecommendColor(prevPlayerIndex);
+                                    // CPUs will pick a random color if there's only black cards in their deck. Otherwise, they pick what they have the most of.
+                                    currentColor = RecommendColor(prevPlayerIndex);
                                 break;
                             }
 
@@ -488,7 +483,7 @@
                 }
 
 
-                // Remove the last played card from the previous player's deck and move it to the discard pile.
+                // Remove this card from its deck and move it to the discard pile.
 
                 discardPile.Push(GetDeck(prevPlayerIndex)[removeIndex]);
 
@@ -542,24 +537,9 @@
                 return (Suit)choice;
             }
 
-            /// <summary>
-            /// Returns what color card the current player has the most of.
-            /// </summary>
-            /// <returns></returns>
-            static Suit RecommendColor() {
-                Dictionary<Suit, int> amounts = new() {
-                    {Suit.Red, 0},
-                    {Suit.Blue, 0},
-                    {Suit.Green, 0},
-                    {Suit.Yellow, 0}
-                };
-
-                foreach(Card card in GetDeck().Where(d => !d.suit.Equals(Suit.Black))) amounts[card.suit] += 1;
-                                
-                return amounts.OrderByDescending(x => x.Value).ToList().First().Key;
-            }
-
             static Suit RecommendColor(int toWho) {
+                if(GetDeck(toWho).Count - GetDeck(toWho).Count(e => e.suit == Suit.Black) == 0) return RandomColor();
+
                 Dictionary<Suit, int> amounts = new() {
                     {Suit.Red, 0},
                     {Suit.Blue, 0},
@@ -775,7 +755,8 @@
 
                                 foreach(Card crd in GetDeck().Where(EvaluateCard)) eval.Add(GetDeck().IndexOf(crd));
                                 
-                                cardIndex = eval[rnd.Next(eval.Count)];
+                                cardIndex = keepScore ? eval.OrderBy(s => GetDeck()[s].points).ToArray()[0] : eval.FirstOrDefault(e => GetDeck()[e].effect == Kind.Numbered, eval[0]);
+                                //eval[rnd.Next(eval.Count)];
 
                                 playCard = true;
                             }
@@ -792,14 +773,14 @@
                                     If they're completely out of options, they simply play a random black card.
                                 */                       
 
-                                // There has to be a better way to write this lmao
-                                if(eval.Any(f => f.effect == Kind.Draw_4) && allPlayers.ElementAt(NextPlayerIndex()).Value.Count <= 5) 
-                                    cardIndex = GetDeck().IndexOf(GetDeck().First(w => w.effect == Kind.Draw_4));
-                                else if(eval.Any(s => s.effect == Kind.Swap) && allPlayers.Any(d => d.Value.Count <= 5)) 
-                                    cardIndex = GetDeck().IndexOf(GetDeck().First(w => w.effect == Kind.Swap));
-                                else if(eval.Any(w => w.effect == Kind.Wild)) 
-                                    cardIndex = GetDeck().IndexOf(GetDeck().First(w=> w.effect == Kind.Wild));
-                                else cardIndex = GetDeck().IndexOf(eval.First()); 
+                                Kind picked = eval switch {
+                                    var ev when ev.Any(f => f.effect == Kind.Draw_4) && allPlayers.ElementAt(NextPlayerIndex()).Value.Count <= 5  => Kind.Draw_4,
+                                    var ev when ev.Any(s => s.effect == Kind.Swap) && allPlayers.Any(d => d.Value.Count <= 5)  => Kind.Swap,
+                                    var ev when ev.Any(w => w.effect == Kind.Wild)  => Kind.Wild,
+                                    _=> eval.First().effect
+                                };
+
+                                cardIndex = GetDeck().IndexOf(eval.First(p => p.effect == picked));
 
                                 playCard = true;
                             }
@@ -843,7 +824,7 @@
 
                 // Create rules for the game.
         
-                playerIndex = YesNo("\nGoing first? (Y/N)") ? 0 : Random.Shared.Next(1, allPlayers.Count);
+                playerIndex = YesNo("\nGoing first? (Y/N)") ? 0 : (allPlayers.Count == 2 ? 1 : Random.Shared.Next(1, allPlayers.Count));
                 bool newCards = YesNo("\nInclude the Swap/Shuffle Hands card? (Y/N)");
                 keepScore = YesNo("\nUse the score system? (Y/N)");
 
