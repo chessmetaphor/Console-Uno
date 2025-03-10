@@ -1,16 +1,5 @@
 ﻿namespace Uno_Game {
 
-    /*
-        TASKS
-        - The CPUs should choose another black card if they are the player with the least amount of cards
-
-        also i need to remind myself to do Random.Shared whenever I need a random value lol
-
-        KNOWN ISSUES:
-        - When you're playing a game with the score system, you don't get to pick a new color if you end the
-        game with a wildcard.
-    */
-
      sealed class UNO_Game {
 
         #region Cards & Players
@@ -750,13 +739,18 @@
 
                         default: // CPU turn
                             if(GetDeck().Any(EvaluateCard)) {
-                                // Picks a random card that either matches the color or number of the last played card.
+                                // If there are cards the CPU can play, the index of each playable card is add to the list below.
+                                
                                 List<int> eval = [];
 
                                 foreach(Card crd in GetDeck().Where(EvaluateCard)) eval.Add(GetDeck().IndexOf(crd));
                                 
+                                /*  Normally, CPUs are more likely to play their numbered cards than their wild cards.
+                                    If you're playing a round with the score system, they'll play cards with lower point
+                                    values.
+                                */
+                                
                                 cardIndex = keepScore ? eval.OrderBy(s => GetDeck()[s].points).ToArray()[0] : eval.FirstOrDefault(e => GetDeck()[e].effect == Kind.Numbered, eval[0]);
-                                //eval[rnd.Next(eval.Count)];
 
                                 playCard = true;
                             }
@@ -770,12 +764,12 @@
                                     If any of the black cards the CPU has are Draw 4s, and the next player is running low on cards, the CPU will use one. 
                                     If the CPU has no Draw 4s BUT has a swap card, they'll swap decks with the player with the least amount of cards.
                                     If they have no Draw 4s OR a swap card, or if there's no good players to swap with or play a Draw 4 on, they'll check to see if they have any wild cards.
-                                    If they're completely out of options, they simply play a random black card.
+                                    If they're completely out of options, they'll simply play a random black card.
                                 */                       
 
                                 Kind picked = eval switch {
                                     var ev when ev.Any(f => f.effect == Kind.Draw_4) && allPlayers.ElementAt(NextPlayerIndex()).Value.Count <= 5  => Kind.Draw_4,
-                                    var ev when ev.Any(s => s.effect == Kind.Swap) && allPlayers.Any(d => d.Value.Count <= 5)  => Kind.Swap,
+                                    var ev when ev.Any(s => s.effect == Kind.Swap) && allPlayers.Any(d => d.Value.Count <= 5) && GetDeck().Count - 1 > GetDeck(RecommendSwap(playerIndex)).Count  => Kind.Swap,
                                     var ev when ev.Any(w => w.effect == Kind.Wild)  => Kind.Wild,
                                     _=> eval.First().effect
                                 };
@@ -891,7 +885,7 @@
                             else {
                                 // Otherwise, the game starts over.
 
-                                Console.WriteLine(">> Redistributing cards...");
+                                Console.WriteLine("\nRedistributing cards...");
 
                                 while(drawPile.Count > 0) builder.Add(drawPile.Pop());
                                 while(discardPile.Count > 0) builder.Add(discardPile.Pop());
@@ -899,6 +893,8 @@
                                 await Task.Run(RebuildDrawPile);
 
                                 await Task.Run(DealCards);
+
+                                await Task.Run(RebuildDiscardPile);
                             }
 
                         } else break;
