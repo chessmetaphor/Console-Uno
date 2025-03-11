@@ -9,7 +9,7 @@
         public enum Kind { Numbered, Skip, Reverse, Draw_2, Wild, Draw_4, Swap, Shuffle }
 
          /// <summary>
-        /// All cards are objects with an assigned number, color, and effect.
+        /// All cards are objects with an assigned number, color, point value, and effect.
         /// </summary>
         struct Card(Suit suit, Kind effect, int number, int points) {
             public int number = number;
@@ -66,10 +66,6 @@
 
             #region Game Creation 
 
-            /// <summary>
-            /// Fills out each player's deck at the start of the game.
-            /// </summary>
-            /// <returns></returns> 
             async static Task CreateCards(bool newCards) {
                 builder.Clear();
 
@@ -102,10 +98,6 @@
                 await Task.Run(RebuildDrawPile);
             }
 
-            /// <summary>
-            /// Creates all the players so the game can start.
-            /// </summary>
-            /// <returns></returns>
             async static Task CreatePlayers() {
                 int playerNum = 0; 
                 do {
@@ -258,11 +250,6 @@
                 await Task.Delay(900);
             }
             
-            /// <summary>
-            /// Sets the global variables back to their default values.
-            /// Clears every existing player and every existing card in the game from the draw and discard piles.
-            /// This is all done before the start of a brand new game.
-            /// </summary>
             static void ResetGame() {
                 reverseOrder = false;
                 highlight = false;
@@ -287,6 +274,10 @@
                     Console.WriteLine("\n>> There are no more cards that can be pulled...");
             }
 
+            /// <summary>
+            /// The task that will run when you play a wildcard. You get to choose an RGBY color.
+            /// </summary>
+            /// <returns></returns>
             static Suit ChooseYourColor() {
                 while(true) {
                     string c_input = Console.ReadLine();
@@ -308,6 +299,7 @@
                 await Task.Run(RebuildDrawPile);
             }
 
+
              /// <summary>
             /// Check to see if a card can be played at all this turn.
             /// </summary>
@@ -325,6 +317,7 @@
                     await Task.Run(EmptyDiscardPile);
                 }
             }
+
 
             /// <summary>
             /// 
@@ -516,6 +509,7 @@
                 await Task.Delay(50);
             }
             
+
             /// <summary>
             /// 
             /// </summary>
@@ -526,8 +520,17 @@
                 return (Suit)choice;
             }
 
+            /// <summary>
+            /// The color a CPU is likely to pick after playing a wildcard.
+            /// </summary>
+            /// <param name="toWho">The index of the CPU choosing a color.</param>
+            /// <returns></returns>
             static Suit RecommendColor(int toWho) {
+                // If all the CPU has is wildcards, a random color is returned.
+
                 if(GetDeck(toWho).Count - GetDeck(toWho).Count(e => e.suit == Suit.Black) == 0) return RandomColor();
+
+                // Otherwise, the color that appears the most in the CPU's deck is returned instead.
 
                 Dictionary<Suit, int> amounts = new() {
                     {Suit.Red, 0},
@@ -542,6 +545,10 @@
             }
             
             /// <summary>
+            /// The index of the player who the CPU is likely to swap decks with.
+            /// </summary>
+            /// <param name="whomst">The CPU whose making the choice to swap</param>
+            /// <returns></returns>
             static int RecommendSwap(int whomst) {
                 Dictionary<int, int> choices = [];
 
@@ -550,6 +557,10 @@
                 return choices.OrderBy(x => x.Value).ToList().First().Key;
             }
 
+            /// <summary>
+            /// The task for when a Shuffle card is played.
+            /// </summary>
+            /// <returns></returns>
             async static Task ShuffleDecks() {
                 // Gather all the cards from every deck.
                 List<Card> swapping = [];
@@ -563,7 +574,7 @@
 
                 List<Card> newOrder = [.. swapping.OrderBy(_=> Random.Shared.Next())];
 
-                // While the newOrder list still has cards, add one card one by one to each deck.
+                // While the shuffled list still has cards, add cards one by one to each deck.
 
                 int ind = playerIndex;
                 while(newOrder.Count > 0) {
@@ -575,6 +586,10 @@
                 await Task.Delay(100);
             }
 
+            /// <summary>
+            /// The task that lets you choose the player you want to swap with.
+            /// </summary>
+            /// <returns></returns>
             static int SwapChoice() {
                 Console.WriteLine("Whose deck do you want? ");
 
@@ -586,6 +601,12 @@
                 }
             }
 
+            /// <summary>
+            /// Swaps the decks of two players.
+            /// </summary>
+            /// <param name="player">The index of the player making the swap.</param>
+            /// <param name="victim">The index of the player that was chosen for the swap.</param>
+            /// <returns></returns>
             async static Task SwapDecks(int player, int victim) {
                 List<List<Card>> toSwap = [];
                 int[] swapThese = [player, victim];
@@ -604,6 +625,7 @@
 
                 await Task.Delay(100);
             }
+
 
             /// <summary>
             /// The player index variable is incremented or decremented based on the players' order.
@@ -739,7 +761,7 @@
 
                         default: // CPU turn
                             if(GetDeck().Any(EvaluateCard)) {
-                                // If there are cards the CPU can play, the index of each playable card is add to the list below.
+                                // If there are cards the CPU can play, the index of each playable card is added to the list below.
                                 
                                 List<int> eval = [];
 
@@ -761,10 +783,10 @@
                                
                                 /* 
                                     It's time to choose a specific wildcard.
-                                    If any of the black cards the CPU has are Draw 4s, and the next player is running low on cards, the CPU will use one. 
-                                    If the CPU has no Draw 4s BUT has a swap card, they'll swap decks with the player with the least amount of cards.
-                                    If they have no Draw 4s OR a swap card, or if there's no good players to swap with or play a Draw 4 on, they'll check to see if they have any wild cards.
-                                    If they're completely out of options, they'll simply play a random black card.
+                                    Draw 4: If the next player after them has 5 or less cards in their deck.
+                                    Swap: If there are any other players with a few cards, and they have more cards than them.
+                                    Wild: If the other conditions weren't met.
+                                    Default: If the CPU didn't have a wildcard, they simply choose the first black card they have.
                                 */                       
 
                                 Kind picked = eval switch {
