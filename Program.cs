@@ -1,6 +1,6 @@
 ﻿namespace Uno_Game {
 
-     sealed class UNO_Game {
+    sealed class UNO_Game {
 
         #region Cards & Players
 
@@ -397,7 +397,7 @@
 
                 
                 bool roundFinished = GetDeck(playerIndex).Count == 1; // True if this card is the current player's last one.
-                int ind =  allPlayers.Count == 2 ? (playerIndex == 0 ? 1 : 0) : NextPlayerIndex();
+                int ind = NextPlayerIndex();
 
                 Console.WriteLine($"{ playThis.effect switch {
                         Kind.Skip => $"A {Enum.GetName(currentColor)} skip card!",
@@ -409,8 +409,8 @@
                         Kind.Shuffle => $"{(GetPlayer().type == Player.Type.YOU ? "You" : GetPlayer().name)} played a Shuffle card!",
                         _=> $"A {Enum.GetName(currentColor)} {currentNumber} was played."}
                         } { (!roundFinished ? playThis.effect switch {
-                            Kind.Skip => $"{(GetPlayer(ind).type == Player.Type.YOU ? "Your" : GetPlayer(ind).name + "'s")} turn was skipped.",
-                            Kind.Reverse => $"It's {(GetPlayer(ind).type == Player.Type.YOU ? "your" : GetPlayer(ind).name + "'s")} turn.",
+                            Kind.Skip => $"{( allPlayers.Count == 2 ? (GetPlayer().type == Player.Type.YOU ? "Player 2's" : "Your") : (GetPlayer(ind).type == Player.Type.YOU ? "Your" : GetPlayer(ind).name + "'s") )} turn was skipped.",
+                            Kind.Reverse => $"It's {( allPlayers.Count == 2 ? (GetPlayer().type == Player.Type.YOU ? "your" : "Player 2's") : (GetPlayer(ind).type == Player.Type.YOU ? "your" : GetPlayer(ind).name + "'s") )} turn.",
                             Kind.Draw_2 => $"{(GetPlayer(ind).type == Player.Type.YOU ? "You were" : GetPlayer(ind).name + " was")} forced to draw two cards!",
                             Kind.Draw_4 => $"{GetPlayer(ind).name} {(GetPlayer(ind).type == Player.Type.YOU ? "were" : "was")} forced to draw four cards!",
                             _=> string.Empty,
